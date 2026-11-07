@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="718pt" height="748pt" viewBox="0 0 718 748"
+     preserveAspectRatio="xMidYMid meet" role="img" aria-labelledby="title desc">
+  <title id="title">Attic floor plan</title>
+  <desc id="desc">Based on the basement exterior footprint, with continuous outer
+    walls and no windows, doors, interior walls, stairs, or fixtures.
+    Dimensions and coordinates match the basement plan.</desc>
+  <path id="exterior-walls" fill="#000000" fill-rule="evenodd" stroke="none"
+        d="M 6,4 H 714 V 717 H 351 V 237 H 6 Z
+           M 21,18 H 701 V 704 H 365 V 221 H 21 Z" />
+</svg>

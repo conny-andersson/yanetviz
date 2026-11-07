@@ -1,0 +1,19 @@
+# Local network credentials
+/inventory.local.yaml
+/data/
+/web/node_modules/
+/web/dist/
+/yanetviz
+*.db
+*.db-shm
+*.db-wal
+/web/test-results/
+/web/playwright-report/
+.env
+.env.*
+
+# IDE and local agent configuration
+/.idea/
+/.agents/
+/.codex/
+/.aws/
