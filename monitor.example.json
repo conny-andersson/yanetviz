@@ -1,0 +1,17 @@
+{
+  "pollSeconds": 60,
+  "sources": [
+    {
+      "id": "main-switch-ports",
+      "device": "documented-switch-device-uuid",
+      "address": "192.0.2.2",
+      "transport": "rest-https",
+      "username": "monitor",
+      "passwordFile": "secrets/router-password",
+      "ports": {
+        "ether1": "documented-port-uuid"
+      },
+      "poe": "auto"
+    }
+  ]
+}

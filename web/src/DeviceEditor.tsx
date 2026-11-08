@@ -1,5 +1,10 @@
+import { DeviceInventory, observedInventory } from "./DeviceInventory";
 import { WiFiDetails } from "./WiFiDetails";
 import type { WiFiView } from "./wifi";
+import { PoEPathStatus } from "./PoEPathStatus";
+import { powerPaths } from "./ports";
+import { PortStatus } from "./PortStatus";
+import type { PortView } from "./ports";
 import { InterfaceEditor } from "./InterfaceEditor";
 import { useState } from "react";
 import { Field, SelectField, TextField } from "./Fields";
@@ -21,6 +26,7 @@ export type ChangePlan = (update: (plan: Plan) => Plan) => void;
 
 type Props = {
   device: Device;
+  portObservations: PortView;
   wifi: WiFiView;
   plan: Plan;
   observations: DHCPObservation[];
@@ -33,6 +39,7 @@ type Props = {
 
 export function DeviceEditor({
   device: d,
+  portObservations,
   wifi,
   plan: p,
   observations,
@@ -207,6 +214,16 @@ export function DeviceEditor({
         disabled={!edit}
         multiline
       />
+      <DeviceInventory inventory={observedInventory(portObservations, d.id)} />
+      <PoEPathStatus
+        plan={p}
+        paths={powerPaths(p, portObservations).filter((path) =>
+          path.ports.some(
+            (id) =>
+              id !== path.source.port && ports.some((port) => port.id === id),
+          ),
+        )}
+      />
       <WiFiDetails plan={p} wifi={wifi} device={d.id} select={select} />
       <InterfaceEditor
         device={d}
@@ -332,6 +349,11 @@ export function DeviceEditor({
             </button>
             {expanded === port.id && (
               <div className="port-details">
+                <PortStatus
+                  plan={p}
+                  port={port}
+                  observations={portObservations}
+                />
                 <TextField
                   label="Port name"
                   value={port.name}
@@ -420,8 +442,9 @@ export function DeviceEditor({
                       disabled={!edit}
                     />
                     <p className="help">
-                      Current power status unknown. Configured mode does not
-                      establish power delivery.
+                      Manual settings describe documentation only. Observed
+                      values above are collected separately and never change
+                      these fields.
                     </p>
                   </>
                 )}

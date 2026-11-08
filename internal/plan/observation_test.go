@@ -213,7 +213,7 @@ func TestSchemaOneUpgradePreservesExistingPlan(t *testing.T) {
 	if err := upgraded.db.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	if version != 4 {
+	if version != 5 {
 		t.Fatalf("schema did not upgrade: %d", version)
 	}
 }

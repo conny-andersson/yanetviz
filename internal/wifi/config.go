@@ -5,11 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/url"
 	"os"
-	"path/filepath"
 	"strings"
 	"yanetviz/internal/plan"
+	"yanetviz/internal/routeros"
 )
 
 // Config keeps management endpoints and credential references outside the plan.
@@ -53,10 +52,10 @@ func LoadConfig(path string, document plan.Plan) (Config, error) {
 		return config, fmt.Errorf("expected one Wi-Fi configuration document")
 	}
 	if config.PollSeconds == 0 {
-		config.PollSeconds = 15
+		config.PollSeconds = 60
 	}
-	if config.PollSeconds < 5 || config.PollSeconds > 30 || len(config.Sources) == 0 || len(config.Sources) > 8 {
-		return config, fmt.Errorf("configure 1–8 Wi-Fi sources and a poll interval of 5–30 seconds")
+	if config.PollSeconds < 5 || config.PollSeconds > 60 || len(config.Sources) == 0 || len(config.Sources) > 8 {
+		return config, fmt.Errorf("configure 1–8 Wi-Fi sources and a poll interval of 5–60 seconds")
 	}
 	devices := map[string]bool{}
 	for _, device := range document.Devices {
@@ -79,31 +78,13 @@ func LoadConfig(path string, document plan.Plan) (Config, error) {
 		if source.Transport == "" {
 			source.Transport = "rest-https"
 		}
-		scheme := "https"
-		if source.Transport == "rest-http" {
-			scheme = "http"
-		} else if source.Transport != "rest-https" {
-			return config, fmt.Errorf("source %q: transport must be rest-https or rest-http", source.ID)
-		}
-		target, err := url.Parse(scheme + "://" + source.Address)
-		if err != nil || target.Hostname() == "" || target.User != nil || target.Path != "" || target.RawQuery != "" || target.Fragment != "" || strings.Contains(source.Address, "/") {
-			return config, fmt.Errorf("source %q: use a management host or host:port", source.ID)
-		}
-		source.endpoint = target.String() + "/rest/"
-		passwordPath := source.PasswordFile
-		if passwordPath == "" {
-			return config, fmt.Errorf("source %q: passwordFile is required", source.ID)
-		}
-		if !filepath.IsAbs(passwordPath) {
-			passwordPath = filepath.Join(filepath.Dir(path), passwordPath)
-		}
-		password, err := os.ReadFile(passwordPath)
+		source.endpoint, err = routeros.Endpoint(source.Address, source.Transport)
 		if err != nil {
-			return config, fmt.Errorf("source %q: cannot read password file", source.ID)
+			return config, fmt.Errorf("source %q: %w", source.ID, err)
 		}
-		source.password = strings.TrimSuffix(strings.TrimSuffix(string(password), "\n"), "\r")
-		if source.password == "" || len(password) > 4096 {
-			return config, fmt.Errorf("source %q: invalid password file", source.ID)
+		source.password, err = routeros.Password(source.PasswordFile, path)
+		if err != nil {
+			return config, fmt.Errorf("source %q: %w", source.ID, err)
 		}
 		mappings := map[string]string{}
 		for mac, device := range source.Radios {

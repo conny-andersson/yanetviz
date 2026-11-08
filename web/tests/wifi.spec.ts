@@ -123,8 +123,10 @@ test("Wi-Fi updates preserve pending documentation and distinguish roaming, stal
       device: "wifi-mobile",
       interface: "mobile-identity",
     });
-    await page.route("**/api/observations/wifi", (route) =>
-      route.fulfill({ json: initial }),
+    await page.route("**/api/observations/live", (route) =>
+      route.fulfill({
+        json: { wifi: initial, ports: { sources: [], readings: [] } },
+      }),
     );
     // Drive observation events without modifying the temporary server's plan.
     // The real SSE response contract is also exercised by the Go API tests.
@@ -138,7 +140,10 @@ test("Wi-Fi updates preserve pending documentation and distinguish roaming, stal
         receive = (event: Event) => {
           this.onmessage?.(
             new MessageEvent("message", {
-              data: JSON.stringify((event as CustomEvent).detail),
+              data: JSON.stringify({
+                wifi: (event as CustomEvent).detail,
+                ports: { sources: [], readings: [] },
+              }),
             }),
           );
         };

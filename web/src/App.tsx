@@ -15,7 +15,8 @@ import {
   type Selection,
 } from "./model";
 
-import { useWiFi } from "./wifi";
+import { useLiveObservations } from "./useLiveObservations";
+import { PortOverview } from "./PortOverview";
 import { WiFiOverview } from "./WiFiOverview";
 
 export function App() {
@@ -40,7 +41,7 @@ export function App() {
   const importInput = useRef<HTMLInputElement>(null);
   const backgroundInput = useRef<HTMLInputElement>(null);
   const dirty = plan !== saved;
-  const wireless = useWiFi(authenticated);
+  const live = useLiveObservations(authenticated);
 
   useEffect(() => {
     setZoom(1);
@@ -325,7 +326,7 @@ export function App() {
         <div className="project-status">
           <span className="status-dot" />
           Manual plan ·{" "}
-          {wireless.view.sources.some((source) => source.state === "fresh")
+          {live.wifi.sources.some((source) => source.state === "fresh")
             ? "Wi-Fi live"
             : "Wi-Fi observations"}{" "}
           <span className="subtle">/</span>{" "}
@@ -410,6 +411,12 @@ export function App() {
                 onClick={() => setView("wifi")}
               >
                 Wi-Fi collection
+              </button>
+              <button
+                className={view === "ports" ? "active" : ""}
+                onClick={() => setView("ports")}
+              >
+                Links &amp; PoE
               </button>
             </nav>
             <div className="edit-actions">
@@ -536,18 +543,26 @@ export function App() {
               </button>
             </div>
           )}
-          {view === "wifi" ? (
+          {view === "ports" ? (
+            <PortOverview
+              plan={plan}
+              observations={live.ports}
+              error={live.error}
+              select={setSelection}
+            />
+          ) : view === "wifi" ? (
             <WiFiOverview
               plan={plan}
-              wifi={wireless.view}
-              error={wireless.error}
+              wifi={live.wifi}
+              error={live.error}
               select={setSelection}
             />
           ) : view === "floor" ? (
             <Map
               key={floor}
               plan={plan}
-              wifi={wireless.view}
+              wifi={live.wifi}
+              portObservations={live.ports}
               floor={floor}
               edit={edit}
               selection={selection}
@@ -601,7 +616,8 @@ export function App() {
             <DeviceEditor
               key={device.id}
               device={device}
-              wifi={wireless.view}
+              wifi={live.wifi}
+              portObservations={live.ports}
               plan={plan}
               observations={observations}
               observationError={observationError}
@@ -620,6 +636,7 @@ export function App() {
             />
           ) : cable ? (
             <CableEditor
+              observations={live.ports}
               navigate={(id) => {
                 setFloor(id);
                 setView("floor");

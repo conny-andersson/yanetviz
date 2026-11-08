@@ -1,5 +1,5 @@
 {
-  "pollSeconds": 15,
+  "pollSeconds": 60,
   "sources": [
     {
       "id": "main-capsman",

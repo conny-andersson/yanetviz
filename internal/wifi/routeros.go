@@ -2,27 +2,24 @@ package wifi
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"net/url"
 	"strconv"
 	"time"
 	"yanetviz/internal/plan"
+	"yanetviz/internal/routeros"
 )
 
 const radioMenu = "interface/wifi/radio"
 const interfaceMenu = "interface/wifi"
 const registrationMenu = "interface/wifi/registration-table"
 
-type row map[string]string
+type row = routeros.Row
 
 // Collector joins non-secret radio inventory and serializes requests through
 // its polling worker. Unknown mappings remain explicit rather than guessed.
 type Collector struct {
 	source Source
-	client *http.Client
+	client *routeros.Client
 
 	radios     []plan.WiFiRadio
 	interfaces map[string]string
@@ -30,43 +27,11 @@ type Collector struct {
 
 // NewCollector uses verified TLS and refuses redirects, including HTTPS to HTTP.
 func NewCollector(source Source) *Collector {
-	return &Collector{source: source, client: &http.Client{
-		Timeout:       5 * time.Second,
-		CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return fmt.Errorf("redirects are not allowed") },
-	}}
+	return &Collector{source: source, client: routeros.NewClient(source.endpoint, source.Username, source.password)}
 }
 
 func (c *Collector) read(ctx context.Context, menu, properties string) ([]row, error) {
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, c.source.endpoint+menu+"?.proplist="+url.QueryEscape(properties), nil)
-	if err != nil {
-		return nil, fmt.Errorf("invalid management endpoint")
-	}
-	request.SetBasicAuth(c.source.Username, c.source.password)
-	response, err := c.client.Do(request)
-	if err != nil {
-		return nil, fmt.Errorf("connection failed or timed out; check management access and TLS")
-	}
-	defer response.Body.Close()
-	switch response.StatusCode {
-	case http.StatusOK:
-	case http.StatusUnauthorized:
-		return nil, fmt.Errorf("authentication failed; check the source credentials")
-	case http.StatusForbidden:
-		return nil, fmt.Errorf("permission denied; allow read access to WiFi CAPsMAN")
-	case http.StatusBadRequest, http.StatusNotFound:
-		return nil, fmt.Errorf("WiFi CAPsMAN menu unsupported; this collector requires /interface/wifi")
-	default:
-		return nil, fmt.Errorf("management request failed (HTTP %d)", response.StatusCode)
-	}
-	raw, err := io.ReadAll(io.LimitReader(response.Body, (8<<20)+1))
-	if err != nil || len(raw) > 8<<20 {
-		return nil, fmt.Errorf("incomplete or oversized management response")
-	}
-	var rows []row
-	if err := json.Unmarshal(raw, &rows); err != nil || rows == nil || len(rows) > 10000 {
-		return nil, fmt.Errorf("invalid or incomplete management response")
-	}
-	return rows, nil
+	return c.client.Read(ctx, menu, properties)
 }
 
 func (c *Collector) inventory(ctx context.Context) error {

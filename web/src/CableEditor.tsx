@@ -1,3 +1,5 @@
+import { CableObservations } from "./CableObservations";
+import type { PortView } from "./ports";
 import { CableRoutingEditor } from "./CableRoutingEditor";
 import { CableLabelButton } from "./CableLabels";
 import { Field, SelectField, TextField } from "./Fields";
@@ -13,6 +15,7 @@ import type { ChangePlan } from "./DeviceEditor";
 
 type Props = {
   cable: Cable;
+  observations: PortView;
   navigate: (floor: string) => void;
   plan: Plan;
   edit: boolean;
@@ -22,6 +25,7 @@ type Props = {
 
 export function CableEditor({
   cable: c,
+  observations,
   plan: p,
   edit,
   change,
@@ -170,12 +174,7 @@ export function CableEditor({
           ))}
         </ol>
       </details>
-      <p className="help">
-        Link status unknown · manual documentation.{" "}
-        {c.medium === "fiber"
-          ? "Fiber carries no PoE."
-          : "Power delivery has not been observed."}
-      </p>
+      <CableObservations plan={p} cable={c} observations={observations} />
       {edit && (
         <button
           className="danger"

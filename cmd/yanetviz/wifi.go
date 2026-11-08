@@ -51,6 +51,11 @@ func (s *server) wifiObservations(w http.ResponseWriter, r *http.Request) {
 // wifiEvents sends derived observation snapshots only; it never reloads the
 // user's working plan. Reconnecting starts with a complete current view.
 func (s *server) wifiEvents(w http.ResponseWriter, r *http.Request) {
+	s.observationEvents(w, r, func() (any, error) { return s.wifiView() })
+}
+
+// observationEvents streams read-only snapshots without replacing pending plans.
+func (s *server) observationEvents(w http.ResponseWriter, r *http.Request, read func() (any, error)) {
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
@@ -68,11 +73,11 @@ func (s *server) wifiEvents(w http.ResponseWriter, r *http.Request) {
 	// Recheck authentication on reconnect, rather than keeping expired sessions.
 	lifetime := time.NewTimer(time.Minute)
 	defer lifetime.Stop()
-	var previous plan.WiFiView
+	var previous any
 	for {
-		view, err := s.wifiView()
+		view, err := read()
 		if err != nil {
-			log.Printf("load Wi-Fi stream observations: %v", err)
+			log.Printf("load stream observations: %v", err)
 			return
 		}
 		// Streaming extends its write deadline only while the client receives data.

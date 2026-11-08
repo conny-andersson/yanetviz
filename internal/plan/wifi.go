@@ -83,7 +83,7 @@ func ReconcileWiFi(p Plan, snapshots []WiFiSnapshot, now, started time.Time, ena
 	}
 	for _, snapshot := range snapshots {
 		success, err := time.Parse(time.RFC3339Nano, snapshot.LastSuccess)
-		fresh := err == nil && !success.Before(started) && !success.After(now) && now.Sub(success) < 45*time.Second && enabled[snapshot.Source] && devices[snapshot.Device]
+		fresh := err == nil && success.After(started) && !success.After(now) && now.Sub(success) < ObservationMaxAge && enabled[snapshot.Source] && devices[snapshot.Device]
 		sourceState := "stale"
 		if fresh {
 			sourceState = "fresh"

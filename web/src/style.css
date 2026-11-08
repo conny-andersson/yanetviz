@@ -1253,3 +1253,70 @@ small {
   background: none;
   border-top: 2px dashed #5871b0;
 }
+.port-overview {
+  padding: 20px;
+  overflow: auto;
+  flex: 1;
+}
+.port-overview table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.port-overview th,
+.port-overview td {
+  padding: 10px;
+  text-align: left;
+  border-bottom: 1px solid #dce2e3;
+}
+.port-source-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+.port-source {
+  border: 1px solid #dce2e3;
+  border-radius: 8px;
+  padding: 12px;
+}
+.port-observations {
+  padding: 10px;
+  margin-bottom: 12px;
+  background: #f3f6f5;
+  border-radius: 6px;
+  line-height: 1.6;
+}
+.cable-observations {
+  border-top: 1px solid #dce2e3;
+  margin-top: 16px;
+}
+.poe-flow {
+  pointer-events: none;
+}
+.poe-flow path {
+  stroke: #9c6700;
+  stroke-width: 1.5;
+  fill: none;
+}
+.poe-flow text {
+  font-size: 11px;
+  fill: #7c5500;
+  paint-order: stroke;
+  stroke: #fff;
+  stroke-width: 3;
+}
+.poe-path-status {
+  border-left: 3px solid #9c6700;
+  padding: 0 10px;
+  margin: 12px 0;
+}
+.poe-path-status > div {
+  margin-bottom: 10px;
+  line-height: 1.6;
+}
+.device-inventory {
+  margin: 12px 0;
+  padding: 10px;
+  border: 1px solid #dce2e3;
+  border-radius: 6px;
+  line-height: 1.6;
+}

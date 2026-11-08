@@ -6,11 +6,13 @@ import {
   type RoutePoint,
   type RouteSection,
 } from "./model";
+import type { PowerFlow } from "./ports";
 import { routeSections } from "./routes";
 
 type Located = RoutePoint & { floor: string };
 type Target = "entry" | "exit" | number;
 type Props = {
+  power: PowerFlow[];
   plan: Plan;
   cable: Cable;
   floor: string;
@@ -27,6 +29,7 @@ type Props = {
 
 export function CableRoute({
   plan,
+  power,
   cable,
   floor,
   height,
@@ -245,6 +248,41 @@ export function CableRoute({
         }}
       />
       <path className="cable-line" d={path} style={{ pointerEvents: "none" }} />
+      {power.map((flow) => {
+        const ordered = flow.fromA ? points : [...points].reverse();
+        const vertices = ordered.flatMap((point, index) =>
+          index === 0
+            ? [point]
+            : [
+                {
+                  x: (ordered[index - 1].x + point.x) / 2,
+                  y: (ordered[index - 1].y + point.y) / 2,
+                },
+                point,
+              ],
+        );
+        const route = vertices
+          .map(
+            (point, index) =>
+              `${index ? "L" : "M"}${point.x * 1000},${point.y * height}`,
+          )
+          .join(" ");
+        return (
+          <g
+            className="poe-flow"
+            key={`${flow.source.source}/${flow.source.port}`}
+            aria-label="Reported PoE-out direction"
+          >
+            <path d={route} markerMid="url(#poe-arrow)" />
+            <text
+              x={(first.x + last.x) * 500}
+              y={((first.y + last.y) * height) / 2 + 16}
+            >
+              ⚡ PoE-out{power.length > 1 ? " · multiple reported sources" : ""}
+            </text>
+          </g>
+        );
+      })}
       <text
         className="cable-label"
         x={(first.x + last.x) * 500}

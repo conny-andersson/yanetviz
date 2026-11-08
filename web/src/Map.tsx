@@ -4,10 +4,12 @@ import { CableRoute } from "./CableRoute";
 import { replaceSections } from "./routes";
 import type { ChangePlan } from "./DeviceEditor";
 
+import { powerFlows, type PortView } from "./ports";
 import { WirelessOverlay } from "./WirelessOverlay";
 import type { WiFiView } from "./wifi";
 
 type Props = {
+  portObservations: PortView;
   wifi: WiFiView;
   plan: Plan;
   floor: string;
@@ -40,6 +42,7 @@ const clampPosition = (value: number) =>
 
 export function Map({
   plan: p,
+  portObservations,
   wifi,
   floor,
   edit,
@@ -62,6 +65,7 @@ export function Map({
     x: number;
     y: number;
   } | null>(null);
+  const power = powerFlows(p, portObservations);
   const bg = p.floors.find((f) => f.id === floor)?.background;
 
   useLayoutEffect(() => {
@@ -265,6 +269,16 @@ export function Map({
           }}
         >
           <defs>
+            <marker
+              id="poe-arrow"
+              markerWidth="7"
+              markerHeight="7"
+              refX="3"
+              refY="3"
+              orient="auto"
+            >
+              <path d="M0,0 L6,3 L0,6 Z" fill="#9c6700" />
+            </marker>
             <pattern
               id="grid"
               width="25"
@@ -290,6 +304,7 @@ export function Map({
                 key={c.id}
                 plan={p}
                 cable={c}
+                power={power.filter((flow) => flow.cable === c.id)}
                 floor={floor}
                 height={height}
                 index={i}

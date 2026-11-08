@@ -51,7 +51,10 @@ func TestWiFiEvidenceSurvivesFailureReopenAndPlanEdits(t *testing.T) {
 	if view.Clients[0].State != "associated" || view.Clients[0].Device != p.Devices[4].ID || view.Sources[0].State != "error" {
 		t.Fatalf("wrong fresh/health view: %#v", view)
 	}
-	if ReconcileWiFi(p, records, now.Add(46*time.Second), now.Add(-time.Second), enabled).Clients[0].State != "stale" {
+	if ReconcileWiFi(p, records, now.Add(120*time.Second), now.Add(-time.Second), enabled).Clients[0].State != "associated" {
+		t.Fatal("60-second polling observations became stale between successful polls")
+	}
+	if ReconcileWiFi(p, records, now.Add(180*time.Second), now.Add(-time.Second), enabled).Clients[0].State != "stale" {
 		t.Fatal("failed evidence did not expire")
 	}
 	// A complete empty snapshot establishes absence and retains last-seen evidence.

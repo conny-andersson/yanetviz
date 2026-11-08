@@ -169,7 +169,7 @@ or missing radios remain unresolved; review mappings in **Wi-Fi collection** and
 edit the configuration before restarting. Interface/radio joins refresh with
 every poll to avoid reusing obsolete mappings after controller provisioning.
 
-Polling defaults to 15 seconds, with configurable intervals from 5–30 seconds,
+Polling defaults to 60 seconds, with configurable intervals from 5–60 seconds,
 five-second request timeouts, up to eight independent sources, sequential requests
 per source, and capped retry backoff with jitter. Wi-Fi collection runs without an
 open browser. Backend/UI updates use Server-Sent Events, refreshing observations
@@ -192,7 +192,7 @@ registrations remain explicit and are not drawn as a definitive AP connection.
 
 A successful complete snapshot can mark a previously seen MAC **Not associated**
 and retain its last-seen time. Errors, partial replies and unsupported menus never
-establish absence. Observations become stale after 45 seconds without a successful
+establish absence. Observations become stale after 180 seconds without a successful
 snapshot, after a live-update connection failure, or on application restart until
 refreshed. Removing a source disables collection and leaves historical snapshots
 stale. This does not assert that a device is powered off. No general online/offline
@@ -202,6 +202,103 @@ For Docker, mount the config and password file read-only, then extend the comman
 with `-wifi-config /config/wifi.json` while retaining `-listen 0.0.0.0:8080 -data
 /data`. Ensure the application user can read the mounted files and reach the
 configured management endpoints.
+
+## Ethernet link and PoE polling
+
+Optional RouterOS monitoring reads negotiated physical link status, rate and
+full/half duplex, plus reported PoE-out mode, vendor status, voltage (V), current
+(mA), and power (W). Copy `monitor.example.json` to a private location, replace the
+example UUIDs/addresses, and point `passwordFile` at a separate private credential
+file. The same HTTP/HTTPS and credential-file rules used for Wi-Fi apply.
+
+```sh
+./yanetviz -listen 127.0.0.1:8080 -data ./data \
+  -wifi-config /path/to/wifi.json -monitor-config /path/to/monitor.json
+```
+
+The two configurations are independent: omit either flag to disable that
+collector.
+
+Each monitor source also accepts a `poe` policy:
+
+- `"auto"` (default): probe the PoE menu/monitor and report the observed support.
+- `"disabled"`: skip PoE requests without making a hardware-support claim.
+- `"unsupported"`: record a confirmed lack of PoE-out support and skip PoE requests.
+
+For example, add `"poe": "unsupported"` to the relevant source object when the
+owner has confirmed that device cannot supply PoE. Link polling and discovery
+continue. The UI distinguishes this configured fact from an unavailable API
+menu, an authentication failure, and an intentionally disabled collector. This
+controls application polling only; it never changes the device's PoE settings.
+A lack of PoE-out does not exclude receiving power through an upstream switch.
+
+Hardware/software discovery uses allowlisted GETs to `/system/resource` (board
+name, RouterOS version, architecture) and `/system/routerboard` (model) at startup
+and every five minutes. **Links & PoE** and device details show these properties
+separately from the manually documented model. Resource objects and one-row
+arrays are supported. Failures preserve the last successful inventory and show
+discovery health; they never rename equipment or overwrite manual model fields.
+Only needed properties are requested; serial numbers and credentials are not
+collected. Model families are not used to guess features. Successful link/PoE
+monitor reads establish API support; missing menus remain **unavailable**, not
+proof that hardware lacks a feature. Changing firmware can be picked up by the
+next discovery/capability refresh or an application restart.
+
+Observed inventory is an optional field in existing source JSON snapshots, so
+this addition needs no SQL migration. It is retained in full SQLite backups and
+excluded from portable manual-plan exports with the other observations.
+ Each monitor source names one documented device and explicitly maps
+RouterOS `default-name` values, such as `ether1` or `sfp-sfpplus1`, to that device's
+port UUIDs. Use current RouterOS names only where a default name is unavailable.
+Bindings survive changes to friendly/documented names; row IDs are used only
+within the current poll. Unknown bindings appear as **Unmapped port** rather than
+being guessed or automatically imported. One monitoring source per device and
+one native binding per documented port prevent competing assignments.
+
+Only allowlisted inventory GETs and fixed one-shot POST reads of
+`/interface/ethernet/monitor` and `/interface/ethernet/poe/monitor` are sent. These
+monitor commands do not set configuration, reset counters, test cables, or cycle
+power. Sources need read/monitor access. See MikroTik's
+[Ethernet monitoring](https://help.mikrotik.com/docs/spaces/ROS/pages/8323191/Ethernet)
+and [PoE-Out monitoring](https://help.mikrotik.com/docs/spaces/ROS/pages/19136769/PoE-Out).
+
+Open **Links & PoE** for per-device collection health and physical-interface
+readings. Expand a port on equipment details, or select a cable for each endpoint's
+observed state. Manual PoE settings remain editable documentation; polling never
+replaces them. Vendor forced-mode variants are retained separately from the
+normalized mode. Auto/forced configuration does not establish power flow or an
+IEEE standard. Missing measurements stay unknown, while an explicit measured
+zero remains zero. Configured speed is never shown as negotiated link speed.
+
+Supplying-port status also appears on every downstream cable, passive terminal,
+and receiving port/device reached through its documented copper path. This
+includes off, waiting, fault and stale states, so the receiving AP can identify
+its upstream switch port without its own PoE-in monitor. Source measurements
+are labeled **At source** and are never copied into receiver measurements.
+
+Fresh `powered-on` reports add lightning labels and direction arrows along
+explicitly documented copper cables and passive front/rear pairs. Tracing stops
+at fiber, active equipment, unknown ports/mappings and loops. Passive compatibility
+is labeled unverified. Watts are measured only at the reported supplying port,
+not every downstream cable or device. Stale data keeps its last readings in the
+details but does not show a current power-flow arrow. Link-up does not prove a
+cable's documented peer, and link-down never removes the cable.
+
+Link and PoE snapshots have separate freshness and failure handling. Healthy
+link polling continues when PoE fails; retry backoff is per channel. An unavailable
+menu/monitor is shown separately and retried every five minutes. It does not
+claim zero power or unsupported hardware on every port. Missing interfaces in a
+complete snapshot retain history and show current status unknown. Observations
+become stale after 180 seconds without successful collection and across restart
+until refreshed. Polling defaults to 60 seconds (configurable 5–60), with five-second
+request timeouts and up to eight monitor sources. Requests to the same endpoint
+are serialized across Wi-Fi and port collectors. The browser uses one combined
+observation stream per tab, preserving pending plan edits and Undo history.
+
+SwOS remains manual in this increment. PoE-in measurements, transceiver details,
+automatic port import and a source/binding configuration UI are not implemented.
+For Docker, mount this configuration/password file read-only and add
+`-monitor-config /config/monitor.json` to the existing application command.
 
 ## Drawing cable routes
 
@@ -287,6 +384,14 @@ roll back to an older binary, restore the pre-upgrade database while the app is
 stopped; older binaries intentionally refuse schema 4. Preserve the private Wi-Fi
 configuration and password files separately when restoring to another machine.
 
+Schema version 5 adds independent link/PoE source snapshots. Upgrading versions
+1–4 preserves manual documentation, route geometry, DHCP evidence and Wi-Fi
+snapshots. Back up the SQLite database before upgrading. Rollback to schema-4
+binaries requires restoring the pre-upgrade database with the app stopped.
+Portable JSON/ZIP exports omit all live observations and monitoring secrets;
+full SQLite backups retain observations. Restore the private monitoring config
+and its credential files separately when moving to another machine.
+
 ## Access and configuration
 
 ```sh
@@ -337,6 +442,10 @@ The same-origin API exposes:
 | `POST /api/validate` | Validate an import without changing saved state |
 | `POST /api/cable-labels/preview` | Preview labels from a complete working plan without saving it |
 | `GET /api/export` | Download the saved documentation archive |
+| `GET /api/observations/live` | Combined Wi-Fi and physical-port observation views |
+| `GET /api/observations/events` | Combined authenticated SSE updates used by the browser |
+| `GET /api/observations/ports` | Link/PoE source health and mapped/unmapped physical readings |
+| `GET /api/observations/ports/events` | Authenticated port-only SSE updates |
 | `GET /api/observations/wifi` | Derived source health, radio mappings and matched/unmatched Wi-Fi clients |
 | `GET /api/observations/wifi/events` | Authenticated SSE observation updates; reconnect sends a complete view |
 | `GET /api/observations/dhcp` | Read saved DHCP evidence separately from the manual plan |
@@ -348,16 +457,16 @@ Save requires the current revision. An outdated revision returns HTTP 409;
 invalid documentation returns 400. Mutations require `X-Yanetviz: 1`. API requests
 are limited to 32 MiB; DHCP observation batches are limited to 8 MiB and 10,000
 records. Plan format version remains 1 with an optional `interfaces` collection;
-SQLite schema version is 4. Observation records must reference a documented source
+SQLite schema version is 5. Observation records must reference a documented source
 device and an interface owning the observed domain/MAC. DHCP client IDs are
 preserved as supplied and do not act as matching keys.
 
 ## Remaining design work
 
 CAPsMAN Wi-Fi polling is implemented for the modern WiFi tables. Legacy collectors,
-a source/mapping configuration UI, automatic DHCP refresh, and observed wired
-link/PoE status remain future work. PoE mode, standard/type, and voltage can be documented on ports, but
-no live power flow is inferred. The topology screen is currently a grouped
+a source/mapping configuration UI, automatic DHCP refresh, SwOS monitoring and
+PoE-in collection remain future work. RouterOS link/PoE-out observations now
+enrich documented physical paths without discovering or verifying cable peers. The topology screen is currently a grouped
 inventory and cable register; a schematic graph with editable layout, richer
-path highlighting and live-update notifications remain future
-work. Uploaded image files may move to a separate asset store in a later schema.
+path highlighting remain future work. Live Wi-Fi/link/PoE observation updates
+are already implemented. Uploaded image files may move to a separate asset store in a later schema.

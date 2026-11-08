@@ -32,7 +32,7 @@ func TestConfigRequiresExplicitHTTPAndValidPhysicalMappings(t *testing.T) {
 		t.Fatal(err)
 	}
 	configured := config.Sources[0]
-	if configured.endpoint != "https://192.0.2.1/rest/" || configured.Domain != "home" || configured.password != "not-a-real-credential" || config.PollSeconds != 15 {
+	if configured.endpoint != "https://192.0.2.1/rest/" || configured.Domain != "home" || configured.password != "not-a-real-credential" || config.PollSeconds != 60 {
 		t.Fatal("secure defaults or credential-file resolution failed")
 	}
 	raw, err := json.Marshal(config)

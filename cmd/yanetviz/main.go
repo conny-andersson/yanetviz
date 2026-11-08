@@ -20,10 +20,13 @@ import (
 	"time"
 	"yanetviz"
 	"yanetviz/internal/plan"
+	"yanetviz/internal/portpoll"
 	"yanetviz/internal/wifi"
 )
 
 type server struct {
+	portEnabled map[string]bool
+	portPending []plan.PortSnapshot
 	wifiStarted time.Time
 	wifiEnabled map[string]bool
 	wifiPending []plan.WiFiSnapshot
@@ -46,6 +49,7 @@ func run() error {
 	data := flag.String("data", "data", "Persistent data directory")
 	secure := flag.Bool("secure-cookie", false, "Require HTTPS for login cookies (enable behind an HTTPS proxy)")
 	wifiPath := flag.String("wifi-config", "", "Optional WiFi CAPsMAN collection configuration JSON")
+	portPath := flag.String("monitor-config", "", "Optional Ethernet link and PoE monitoring configuration JSON")
 	flag.Parse()
 	password := os.Getenv("YANETVIZ_PASSWORD")
 	host, _, err := net.SplitHostPort(*addr)
@@ -79,12 +83,34 @@ func run() error {
 			return err
 		}
 	}
+	var portConfig portpoll.Config
+	if *portPath != "" {
+		document, err := store.Load()
+		if err != nil {
+			return err
+		}
+		portConfig, err = portpoll.LoadConfig(*portPath, document)
+		if err != nil {
+			return err
+		}
+	}
 	s := &server{store: store, auth: password != "", password: sha256.Sum256([]byte(password)), sessions: map[string]time.Time{}, secure: *secure}
 	s.wifiStarted = time.Now()
 	s.wifiEnabled = map[string]bool{}
 	for _, source := range wifiConfig.Sources {
 		s.wifiEnabled[source.ID] = true
 		s.wifiPending = append(s.wifiPending, plan.WiFiSnapshot{Source: source.ID, Device: source.Device, Domain: source.Domain})
+	}
+	s.portEnabled = map[string]bool{}
+	for _, source := range portConfig.Sources {
+		s.portEnabled[source.ID] = true
+		for _, channel := range []string{"link", "poe"} {
+			capability := ""
+			if channel == "poe" && source.PoE != "auto" {
+				capability = source.PoE
+			}
+			s.portPending = append(s.portPending, plan.PortSnapshot{Source: source.ID, Device: source.Device, Channel: channel, Capability: capability})
+		}
 	}
 	web, err := fs.Sub(yanetviz.Assets, "web/dist")
 	if err != nil {
@@ -99,6 +125,10 @@ func run() error {
 	mux.HandleFunc("/api/cable-labels/preview", s.protect(s.previewCableLabels))
 	mux.HandleFunc("/api/export", s.protect(s.export))
 	mux.HandleFunc("/api/observations/dhcp", s.protect(s.dhcpObservations))
+	mux.HandleFunc("/api/observations/live", s.protect(s.liveObservations))
+	mux.HandleFunc("/api/observations/events", s.protect(s.liveEvents))
+	mux.HandleFunc("/api/observations/ports", s.protect(s.portObservations))
+	mux.HandleFunc("/api/observations/ports/events", s.protect(s.portEvents))
 	mux.HandleFunc("/api/observations/wifi", s.protect(s.wifiObservations))
 	mux.HandleFunc("/api/observations/wifi/events", s.protect(s.wifiEvents))
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
@@ -135,7 +165,17 @@ func run() error {
 	collectionDone := make(chan struct{})
 	go func() {
 		defer close(collectionDone)
-		wifi.Run(collectionCtx, wifiConfig, store)
+		var collectors sync.WaitGroup
+		collectors.Add(2)
+		go func() {
+			defer collectors.Done()
+			wifi.Run(collectionCtx, wifiConfig, store)
+		}()
+		go func() {
+			defer collectors.Done()
+			portpoll.Run(collectionCtx, portConfig, store)
+		}()
+		collectors.Wait()
 	}()
 	defer func() {
 		cancelCollection()

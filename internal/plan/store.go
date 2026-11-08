@@ -28,7 +28,7 @@ func Open(path string, seed Plan) (*Store, error) {
 	if err := db.QueryRow("PRAGMA user_version").Scan(&schemaVersion); err != nil {
 		return fail(err)
 	}
-	if schemaVersion > 4 {
+	if schemaVersion > 5 {
 		return fail(fmt.Errorf("database schema %d is newer than this application supports", schemaVersion))
 	}
 	if _, err = db.Exec(`PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;`); err != nil {
@@ -39,6 +39,7 @@ func Open(path string, seed Plan) (*Store, error) {
 		return fail(err)
 	}
 	_, err = migration.Exec(`
+ CREATE TABLE IF NOT EXISTS port_sources (source TEXT NOT NULL, channel TEXT NOT NULL, payload TEXT NOT NULL, PRIMARY KEY(source,channel));
  CREATE TABLE IF NOT EXISTS wifi_sources (source TEXT PRIMARY KEY, payload TEXT NOT NULL);
  CREATE TABLE IF NOT EXISTS metadata (id INTEGER PRIMARY KEY CHECK(id=1), version INTEGER NOT NULL, revision INTEGER NOT NULL);
  CREATE TABLE IF NOT EXISTS floors (id TEXT PRIMARY KEY, payload TEXT NOT NULL);
@@ -63,7 +64,7 @@ func Open(path string, seed Plan) (*Store, error) {
 			return fail(errors.Join(err, migration.Rollback()))
 		}
 	}
-	if _, err = migration.Exec("PRAGMA user_version=4"); err != nil {
+	if _, err = migration.Exec("PRAGMA user_version=5"); err != nil {
 		return fail(errors.Join(err, migration.Rollback()))
 	}
 	if err = migration.Commit(); err != nil {
