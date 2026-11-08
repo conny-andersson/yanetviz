@@ -1,5 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { endpoint, location, roles, type Plan, type Selection } from "./model";
+import { location, roles, type Plan, type Selection } from "./model";
+import { CableRoute } from "./CableRoute";
+import { replaceSections } from "./routes";
+import type { ChangePlan } from "./DeviceEditor";
 
 type Props = {
   plan: Plan;
@@ -11,6 +14,7 @@ type Props = {
   navigate: (id: string) => void;
   showCables: boolean;
   zoom: number;
+  change: ChangePlan;
 };
 
 type DragGesture = {
@@ -40,6 +44,7 @@ export function Map({
   navigate,
   showCables,
   zoom,
+  change,
 }: Props) {
   const viewport = useRef<HTMLDivElement>(null);
   const svg = useRef<SVGSVGElement>(null);
@@ -275,79 +280,25 @@ export function Map({
             />
           )}
           {showCables &&
-            p.cables.map((c, i) => {
-              const a = devicePoint(c.a.device),
-                b = devicePoint(c.b.device);
-              if (a?.floor !== floor && b?.floor !== floor) return null;
-              const local = a?.floor === floor ? a : b!;
-              const remote = a?.floor === floor ? b : a;
-              const both = remote?.floor === floor;
-              const x1 = local.x * 1000,
-                y1 = local.y * height;
-              const x2 = both ? remote!.x * 1000 : 930,
-                y2 = both
-                  ? remote!.y * height
-                  : Math.max(
-                      30,
-                      Math.min(height - 30, y1 + ((i % 3) - 1) * 65),
-                    );
-              const selected =
-                selection?.kind === "cable" && selection.id === c.id;
-              const remoteEndpoint = a?.floor === floor ? c.b : c.a;
-              return (
-                <g
-                  key={c.id}
-                  className={`cable ${c.medium} ${selected ? "chosen" : ""}`}
-                  role="button"
-                  tabIndex={0}
-                  aria-label={`${endpoint(p, c.a)} to ${endpoint(p, c.b)}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    select({ kind: "cable", id: c.id });
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") select({ kind: "cable", id: c.id });
-                  }}
-                >
-                  <path className="cable-hit" d={`M${x1},${y1} L${x2},${y2}`} />
-                  <path
-                    className="cable-line"
-                    d={`M${x1},${y1} L${x2},${y2}`}
-                  />
-                  <text
-                    className="cable-label"
-                    x={(x1 + x2) / 2}
-                    y={(y1 + y2) / 2 - 8}
-                  >
-                    {c.medium}
-                    {c.draft ? " · draft" : ""}
-                  </text>
-                  {!both && (
-                    <g
-                      className="portal"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (remote) navigate(remote.floor);
-                        select({ kind: "device", id: remoteEndpoint.device });
-                      }}
-                    >
-                      <circle cx={x2} cy={y2} r="9" />
-                      <text x={x2 - 12} y={y2 - 15} textAnchor="end">
-                        To{" "}
-                        {remote
-                          ? p.floors.find((f) => f.id === remote.floor)?.name
-                          : "unplaced"}{" "}
-                        /{" "}
-                        {
-                          p.devices.find((d) => d.id === remoteEndpoint.device)
-                            ?.name
-                        }
-                      </text>
-                    </g>
-                  )}
-                </g>
-              );
-            })}
+            p.cables.map((c, i) => (
+              <CableRoute
+                key={c.id}
+                plan={p}
+                cable={c}
+                floor={floor}
+                height={height}
+                index={i}
+                a={devicePoint(c.a.device)}
+                b={devicePoint(c.b.device)}
+                selected={selection?.kind === "cable" && selection.id === c.id}
+                edit={edit}
+                select={() => select({ kind: "cable", id: c.id })}
+                navigate={navigate}
+                update={(sections) =>
+                  change((plan) => replaceSections(plan, c.id, sections))
+                }
+              />
+            ))}
           {p.cabinets
             .filter((c) => c.floor === floor && c.placed)
             .map((c) =>

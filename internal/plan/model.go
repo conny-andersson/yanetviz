@@ -10,6 +10,7 @@ import (
 
 // Floor describes a named canvas and its background image.
 type Floor struct {
+	Level      *int   `json:"level,omitempty"`
 	ID         string `json:"id"`
 	Name       string `json:"name"`
 	Background string `json:"background"`
@@ -73,14 +74,15 @@ type Endpoint struct {
 
 // Cable documents a single physical segment. Draft keeps incomplete routing explicit.
 type Cable struct {
-	ID     string   `json:"id"`
-	A      Endpoint `json:"a"`
-	B      Endpoint `json:"b"`
-	Medium string   `json:"medium"`
-	Label  string   `json:"label"`
-	Length *float64 `json:"length"`
-	Notes  string   `json:"notes"`
-	Draft  bool     `json:"draft"`
+	Sections []RouteSection `json:"sections,omitempty"`
+	ID       string         `json:"id"`
+	A        Endpoint       `json:"a"`
+	B        Endpoint       `json:"b"`
+	Medium   string         `json:"medium"`
+	Label    string         `json:"label"`
+	Length   *float64       `json:"length"`
+	Notes    string         `json:"notes"`
+	Draft    bool           `json:"draft"`
 }
 
 // PassThrough joins front/rear terminals without consuming external cable capacity.
@@ -136,6 +138,9 @@ func (p Plan) Validate() error {
 		}
 		if !name(f.Name) {
 			return errors.New("floor name is required")
+		}
+		if f.Level != nil && (*f.Level < -1000 || *f.Level > 1000) {
+			return errors.New("floor level must be between -1000 and 1000")
 		}
 		if err := validateBackground(f.Background); err != nil {
 			return err
@@ -218,6 +223,9 @@ func (p Plan) Validate() error {
 	for _, c := range p.Cables {
 		if err := id(c.ID); err != nil {
 			return err
+		}
+		if err := validateSections(c.Sections, floors); err != nil {
+			return fmt.Errorf("cable %q: %w", c.ID, err)
 		}
 		if !oneOf(c.Medium, "copper", "fiber", "unknown") {
 			return errors.New("invalid cable medium")

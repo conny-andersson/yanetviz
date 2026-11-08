@@ -60,6 +60,13 @@ func TestValidationDoesNotPersistImport(t *testing.T) {
 
 func TestExportContainsRestorablePlanAndBackgrounds(t *testing.T) {
 	document := plan.Seed()
+	level := -1
+	document.Floors[0].Level = &level
+	document.Cables[0].Sections = []plan.RouteSection{
+		{Floor: document.Floors[0].ID, Exit: &plan.RoutePoint{X: .3, Y: .4}, Confirmed: true},
+		{Floor: document.Floors[1].ID, Entry: &plan.RoutePoint{X: .2, Y: .7}, Exit: &plan.RoutePoint{X: .8, Y: .1}, Points: []plan.RoutePoint{{X: .4, Y: .5}}},
+		{Floor: document.Floors[2].ID, Entry: &plan.RoutePoint{X: .9, Y: .2}},
+	}
 	document.Interfaces = []plan.NetworkInterface{{ID: plan.NewID(), Device: document.Devices[4].ID, Name: "Wi-Fi", Domain: "home", MACAddresses: []string{"02:11:22:33:44:55"}}}
 	physical := plan.Port{ID: plan.NewID(), Device: document.Devices[4].ID, Name: "ether1", PoEMode: "unknown"}
 	document.Ports = append(document.Ports, physical)

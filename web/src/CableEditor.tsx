@@ -1,3 +1,4 @@
+import { CableRoutingEditor } from "./CableRoutingEditor";
 import { CableLabelButton } from "./CableLabels";
 import { Field, SelectField, TextField } from "./Fields";
 import {
@@ -12,6 +13,7 @@ import type { ChangePlan } from "./DeviceEditor";
 
 type Props = {
   cable: Cable;
+  navigate: (floor: string) => void;
   plan: Plan;
   edit: boolean;
   change: ChangePlan;
@@ -24,6 +26,7 @@ export function CableEditor({
   edit,
   change,
   select,
+  navigate,
 }: Props) {
   const patch = (update: Partial<Cable>) =>
     change((plan) => ({
@@ -145,6 +148,13 @@ export function CableEditor({
         Document each patch lead and building cable separately. Resolve the
         entire segment before marking it complete.
       </p>
+      <CableRoutingEditor
+        plan={p}
+        cable={c}
+        edit={edit}
+        change={change}
+        navigate={navigate}
+      />
       <TextField
         label="Notes / routing details"
         value={c.notes}

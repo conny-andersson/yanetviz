@@ -1,4 +1,9 @@
-export type Floor = { id: string; name: string; background: string };
+export type Floor = {
+  id: string;
+  name: string;
+  background: string;
+  level?: number | null;
+};
 export type Cabinet = {
   shortName?: string;
   heightU?: number | null;
@@ -40,7 +45,16 @@ export type Port = {
   notes: string;
 };
 export type Endpoint = { device: string; port: string };
+export type RoutePoint = { x: number; y: number };
+export type RouteSection = {
+  floor: string;
+  entry?: RoutePoint;
+  exit?: RoutePoint;
+  points?: RoutePoint[];
+  confirmed: boolean;
+};
 export type Cable = {
+  sections?: RouteSection[];
   id: string;
   a: Endpoint;
   b: Endpoint;

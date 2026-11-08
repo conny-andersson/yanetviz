@@ -18,6 +18,14 @@ func TestDocumentationSurvivesReopen(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	document.Floors[0].Level = rackUnits(-1)
+	document.Floors[1].Level = rackUnits(0)
+	document.Floors[2].Level = rackUnits(1)
+	document.Cables[0].Sections = []RouteSection{
+		{Floor: document.Floors[0].ID, Exit: &RoutePoint{.3, .4}, Confirmed: true},
+		{Floor: document.Floors[1].ID, Entry: &RoutePoint{.2, .7}, Exit: &RoutePoint{.8, .1}, Points: []RoutePoint{{.4, .5}}},
+		{Floor: document.Floors[2].ID, Entry: &RoutePoint{.9, .2}},
+	}
 	document.Devices[0].Name = "Basement router"
 	document.Cabinets[0].HeightU = rackUnits(12)
 	document.Cabinets[0].ShortName = "R01"

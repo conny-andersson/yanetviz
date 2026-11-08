@@ -482,6 +482,37 @@ export function App() {
               <button onClick={() => add("cabinet")}>+ Cabinet</button>
               <button onClick={() => add("cable")}>+ Cable</button>
               <CableLabelButton plan={plan} change={change} />
+              <label className="floor-level">
+                Floor level (optional)
+                <input
+                  aria-label="Floor level (optional)"
+                  type="number"
+                  min="-1000"
+                  max="1000"
+                  step="1"
+                  placeholder="Unknown"
+                  value={
+                    plan.floors.find((item) => item.id === floor)?.level ?? ""
+                  }
+                  onChange={(event) => {
+                    const level =
+                      event.target.value === ""
+                        ? null
+                        : Number(event.target.value);
+                    if (
+                      level !== null &&
+                      (!Number.isInteger(level) || Math.abs(level) > 1000)
+                    )
+                      return;
+                    change((current) => ({
+                      ...current,
+                      floors: current.floors.map((item) =>
+                        item.id === floor ? { ...item, level } : item,
+                      ),
+                    }));
+                  }}
+                />
+              </label>
               <span />
               <button onClick={() => backgroundInput.current?.click()}>
                 Replace background
@@ -502,6 +533,7 @@ export function App() {
               navigate={setFloor}
               showCables={showCables}
               zoom={zoom}
+              change={change}
               move={(kind, id, x, y) =>
                 change((plan) =>
                   kind === "cabinet"
@@ -565,6 +597,10 @@ export function App() {
             />
           ) : cable ? (
             <CableEditor
+              navigate={(id) => {
+                setFloor(id);
+                setView("floor");
+              }}
               cable={cable}
               plan={plan}
               edit={edit}

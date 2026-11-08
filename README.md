@@ -136,6 +136,39 @@ management transports in private local files. `DESIGN.local.md`, when present,
 contains installation notes and is excluded from Git. `DESIGN.md` describes the
 application independently of any particular installation.
 
+## Drawing cable routes
+
+In **Edit mode**, set the current floor's optional integer **Floor level** in the
+canvas toolbar (for example basement `-1`, entrance `0`, attic `1`). Leave unknown
+levels blank. Multiple areas can share a level; levels do not change tab order.
+
+Select a cable to open **Cable route · A → B**. Double-click its line to insert a
+bend point, then drag the point to follow the actual route. Double-click a bend
+point, or focus it and press Delete, to remove it. Drag circular cross-floor
+markers to the riser or penetration. Clicking in Edit mode selects without
+moving or navigating. In View mode, clicking a marker opens the adjacent floor
+section and keeps the cable selected.
+
+Use **Insert intermediate floor before endpoint B** to choose a pass-through
+floor explicitly. Levels between the endpoints are marked in the chooser;
+shared levels never cause an area to be selected automatically. Each intermediate
+section has two independent markers and its own bend points. Reorder intermediate
+sections with the arrow buttons and remove them individually. Check **Route
+documented on this floor** only after documenting its path; this is independent
+of cable draft status and observed link status.
+
+**Straighten section** removes its bends; **Reset floor markers** restores its
+automatic portal positions. **Reset entire route** previews what will be removed
+before confirmation. All route edits use the normal Undo and Save workflow.
+Moving equipment within a floor moves only its anchored cable endpoint. Moving
+it to another floor preserves the saved route and shows a warning to reset the
+route explicitly. Level changes preserve all route geometry and confirmation.
+
+Routes currently visit each floor plan at most once and do not branch. Geometry
+is manual documentation, not measured length. Existing cables remain straight
+with automatic markers until edited. Floor levels, route sections, markers and
+bends are included in working-copy JSON and saved-plan exports.
+
 ## Storage, export, and recovery
 
 By default, SQLite lives in `data/yanetviz.db`. Select another directory with
@@ -163,7 +196,7 @@ The initial schema uses relational foreign keys for ownership and endpoints,
 with JSON payloads for each entity's descriptive fields. Full-plan replacement
 keeps this small application's edit transaction simple. Later migrations can
 extract fields as query requirements grow. Existing databases are never reseeded.
-Rack dimensions and positions are optional entity fields, so older databases and
+Rack dimensions, floor levels and cable route sections are optional entity fields, so older databases and
 plan exports remain readable without a SQL migration. Saving, exporting, and
 restoring retain the new fields alongside the rest of the documentation.
 
@@ -248,5 +281,5 @@ There is no MikroTik polling, live Wi-Fi association data, or observed link/PoE
 status yet. PoE mode, standard/type, and voltage can be documented on ports, but
 no live power flow is inferred. The topology screen is currently a grouped
 inventory and cable register; a schematic graph with editable layout, richer
-path highlighting, cable bend points, and live-update notifications remain future
+path highlighting and live-update notifications remain future
 work. Uploaded image files may move to a separate asset store in a later schema.

@@ -142,7 +142,7 @@ Expose a small same-origin JSON API for floors, assets, devices, placements, por
 
 | Entity | Main contents |
 | --- | --- |
-| Floor / asset | Name, order, background reference, original dimensions |
+| Floor / asset | Name, display order, optional numeric level, background reference, original dimensions; multiple plans may share a level |
 | Cabinet | Name, optional short name and height in U, floor placement, device membership; independent topology layout |
 | Device | UUID, friendly name, optional short name, roles, model, placement mode, optional equipment height and starting rack unit; one device may be both router and AP |
 | Placement | Device, floor, normalized x/y, optional rotation |
@@ -150,7 +150,8 @@ Expose a small same-origin JSON API for floors, assets, devices, placements, por
 | Passive position / terminal | Panel or wall-plate ownership, position label, front/rear terminals, connector and medium details |
 | Internal pass-through | Explicit terminal pair within a passive position; separate from external cables |
 | Port label metadata | Optional numeric cable-label number; inferred simple numbers and terminal side suffixes are checked for ambiguity during label generation |
-| Cable | Two port endpoints, optional label, medium, length, and route points; incomplete drafts retain known device endpoints and unresolved port state |
+| Cable | Two port endpoints, optional label, medium, length, and ordered per-floor route sections; incomplete drafts retain known device endpoints and unresolved port state |
+| Cable route section | Cable and floor references, sequence, normalized entry/exit portal positions and bend points, route documentation state; no extra physical endpoints |
 | Port PoE | Capability/direction, documented mode and standard/type, observed configured mode and raw vendor value, voltage selection, live output status/volts/amps/watts with source timestamps |
 | Integration source | Management address, transport, identity domain, credential reference, capabilities |
 | Observation | Source, client interface identity, AP/radio mapping, SSID, signal, observed IPs, timestamps |
@@ -187,6 +188,30 @@ Offer a portable plan export for floors, placements, equipment, cables, and imag
 7. Trace a switch-to-AP path through a patch panel and wall jack. Show each cable and internal pass-through, retain the path after reload, and stop clearly at any unresolved terminal.
 8. Display a supplying port's automatic or forced PoE mode separately from its current power status. Preserve mode documentation during collection failures, mark measurements stale, and never infer power delivery over fiber or from configuration alone.
 
-**Suggested delivery sequence.** First confirm the hardware/software inventory and inspect sanitized read-only responses from one representative AP or controller. This establishes transport support, registration visibility, and physical AP mapping before committing to an adapter. Next build the manual multi-floor plan and cable editor. Then add collection, client matching, freshness, and live updates. Complete the first release with Docker packaging, authentication, export/restore, and the acceptance scenarios above. Add automatic cable suggestions and longer-term history only after the core model works with the installation's equipment.
+**Cable routes across floors (implemented).** The manual editor supports the following route documentation features.
+
+1. **Movable cross-floor cable markers.** In Edit mode, drag the circular portal to the actual cable riser or floor penetration. Store each portal's position per cable and floor, independently of device/cabinet positions and other portals. A click selects without moving; dragging uses the existing movement threshold and must not trigger floor navigation on release. View-mode clicks retain navigation to the corresponding section. Unpositioned portals retain the current automatic placement as a fallback, with an explicit reset to that placement.
+2. **Editable cable routing.** Select a cable in Edit mode to add, drag, or remove bend points and reset a section to a straight line. Draw the documented route as a polyline through those points. Equipment endpoints remain anchored to their devices or cabinets; moving a device updates its endpoint without moving unrelated bend points. Store normalized coordinates against each floor's original background, preserving routes across zoom, fit-to-view, reload, export, and restore. Routing geometry documents the path without claiming a measured cable length.
+3. **Floor levels and intermediate sections.** Give each floor plan an optional integer level, for example basement −1, entrance 0, and attic 1. Levels express vertical order rather than elevation in metres. Floor names and tab order remain independent, and multiple areas may share a level, such as a garage and entrance floor. Unknown levels stay unset. Use levels to suggest intermediate floors, but require explicit selection where multiple plans share a level; never choose an area arbitrarily or claim an actual route from level numbers alone.
+
+Model these items together as an ordered list of route sections belonging to one physical cable. A section is the cable's drawing on one floor, not a new cable, patch lead, port, or network hop. It must not change cable identity, labels, medium, observations, or the rule that each physical connector accepts only one cable. Preserve the distinction between these drawing sections and the separate physical cable segments used to document patch panels and sockets.
+
+For a basement-to-attic cable routed through the entrance floor, show an endpoint-to-exit-portal section in the basement, an entry-portal-to-exit-portal section on the entrance floor, and an entry-portal-to-endpoint section in the attic. Each section has its own bend points and portal positions. Portal labels identify the next section's floor and retain context about the final endpoint. Navigating through a portal keeps the cable selected. Sections form one ordered continuous path; they do not introduce branches or assign coordinates from another floor's drawing.
+
+Suggested intermediate sections start with route geometry explicitly undocumented. Their confirmation state is separate from whether the cable's physical endpoint documentation is complete and whether an observed port is linked. Adding or changing a floor level must not silently rewrite existing user-documented sections. Route edits use the existing Save, Undo, revision checks, and deletion previews. Existing plans load without levels or route sections, with current straight lines and automatic portals as fallbacks.
+
+Implementation details: optional `Floor.level` and ordered `Cable.sections` fields live in existing JSON entity payloads, without a SQL migration or plan-format version change. Section order runs from A to B; each section references one distinct floor and stores optional entry/exit portal coordinates, bend points and a separate `confirmed` flag. A route visits each floor plan at most once in this increment. Missing geometry uses automatic positions. Backend validation rejects unknown or repeated floors, out-of-range coordinates and more than 500 bends per section. Floor levels range from −1000 to 1000.
+
+Double-clicking a line inserts a bend in its nearest drawn segment. Double-clicking a bend or pressing Delete on a focused bend removes it. Intermediate sections are chosen individually, inserted before B and can be reordered or removed. Level-based hints annotate the chooser without selecting a floor. Moving equipment onto another floor preserves historical section geometry and warns that the route needs an explicit reset; it never silently drops documented intermediate sections. Full-route reset requires confirmation; section geometry resets and all changes remain undoable before saving.
+
+Acceptance examples for this work:
+
+- Move one cable portal to a different floor-plan location, save, and reload. Other cable portals and equipment positions remain unchanged; clicking without dragging does not move it.
+- Route a cable around a room with several bend points, then zoom, resize, and move one endpoint. Its normalized route persists, and only the device-anchored endpoint follows the device.
+- Assign levels −1, 0, and 1, then document a basement-to-attic cable with a routable entrance-floor section. Move both intermediate portals, navigate between sections, and retain one cable ID, one label, and two physical port endpoints.
+- Provide two plans at level 0. Intermediate-floor suggestions require an explicit area choice, while existing confirmed sections survive later level changes.
+- Undo route edits, reload after a conflicting save, and export/restore the plan. Route sections, bend points, portal positions, and documentation states remain consistent without losing other network documentation.
+
+**Suggested delivery sequence.** First confirm the hardware/software inventory and inspect sanitized read-only responses from one representative AP or controller. This establishes transport support, registration visibility, and physical AP mapping before committing to an adapter. Next build the manual multi-floor plan and cable editor, including the implemented routing controls above. Then add collection, client matching, freshness, and live updates. Complete the first release with Docker packaging, authentication, export/restore, and the acceptance scenarios above. Add automatic cable suggestions and longer-term history only after the core model works with the installation's equipment.
 
 **Deployment inputs.** Each installation supplies device models and operating systems; RouterOS versions and Wi-Fi packages; whether either CAPsMAN generation is used; whether floor images already exist; and the intended Docker host and management-network reachability. Proposed defaults are a single household administrator, uploaded raster plans or blank canvases, manual wired topology, REST over HTTPS where supported, and SQLite. None of these requires implementation before design review.

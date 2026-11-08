@@ -1142,3 +1142,45 @@ small {
   color: #82988a;
   font-size: 9px;
 }
+
+.floor-level {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.floor-level input {
+  width: 90px;
+}
+.routing-editor {
+  border-top: 1px solid #dce2e3;
+  margin-top: 20px;
+}
+.routing-editor ol {
+  padding-left: 20px;
+}
+.routing-editor li {
+  margin-bottom: 16px;
+}
+.route-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 8px;
+}
+.route-actions button {
+  font-size: 11px;
+  padding: 5px 7px;
+}
+.route-handle circle {
+  fill: #fff;
+  stroke: #1a746b;
+  stroke-width: 2px;
+}
+.route-handle,
+.portal {
+  touch-action: none;
+}
+.route-handle {
+  cursor: move;
+}
