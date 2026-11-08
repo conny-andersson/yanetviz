@@ -1,14 +1,37 @@
 import { endpoint, roles, type Plan, type Selection } from "./model";
+import { rackLabel } from "./Rack";
+
+export type CableSort = "original" | "ascending" | "descending";
+const labelCollator = new Intl.Collator(undefined, {
+  numeric: true,
+  sensitivity: "base",
+});
 
 export function Topology({
   plan,
   selection,
   select,
+  cableSort,
+  setCableSort,
 }: {
   plan: Plan;
   selection: Selection;
   select: (selection: Selection) => void;
+  cableSort: CableSort;
+  setCableSort: (order: CableSort) => void;
 }) {
+  // Sort a copy for display; saved cable order and endpoint order stay intact.
+  const cables =
+    cableSort === "original"
+      ? plan.cables
+      : [...plan.cables].sort((left, right) => {
+          const a = left.label.trim();
+          const b = right.label.trim();
+          if (!a || !b) return Number(!a) - Number(!b);
+          return (
+            labelCollator.compare(a, b) * (cableSort === "descending" ? -1 : 1)
+          );
+        });
   return (
     <div className="topology-view">
       <div className="topology-groups">
@@ -40,6 +63,7 @@ export function Topology({
                       (cabinet) => cabinet.id === device.cabinet,
                     )?.name || roles[device.role]}
                   </small>
+                  {device.cabinet && <small>{rackLabel(device)}</small>}
                   <span>
                     {plan.ports
                       .filter((port) => port.device === device.id)
@@ -59,8 +83,21 @@ export function Topology({
         <div className="section-heading">
           <h2>Cable register</h2>
           <span>{plan.cables.length} segments</span>
+          <label className="cable-sort">
+            <span>Sort cables</span>
+            <select
+              value={cableSort}
+              onChange={(event) =>
+                setCableSort(event.target.value as CableSort)
+              }
+            >
+              <option value="original">Original order</option>
+              <option value="ascending">Label A–Z</option>
+              <option value="descending">Label Z–A</option>
+            </select>
+          </label>
         </div>
-        {plan.cables.map((cable) => (
+        {cables.map((cable) => (
           <button
             className={`cable-register-row ${selection?.id === cable.id ? "active" : ""}`}
             key={cable.id}

@@ -49,6 +49,39 @@ export function TextField({
   );
 }
 
+export function UnitField({
+  label,
+  value,
+  onChange,
+  disabled = false,
+  placeholder = "Unknown",
+}: {
+  label: string;
+  value: number | null | undefined;
+  onChange: (value: number | null) => void;
+  disabled?: boolean;
+  placeholder?: string;
+}) {
+  return (
+    <Field label={label}>
+      <input
+        type="number"
+        min="1"
+        max="1000"
+        step="1"
+        value={value ?? ""}
+        placeholder={placeholder}
+        disabled={disabled}
+        onChange={(event) =>
+          onChange(
+            event.target.value === "" ? null : Number(event.target.value),
+          )
+        }
+      />
+    </Field>
+  );
+}
+
 export function SelectField({
   label,
   value,

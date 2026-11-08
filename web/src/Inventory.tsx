@@ -1,13 +1,22 @@
 import { useState } from "react";
-import { location, roles, type Plan, type Selection } from "./model";
+import {
+  location,
+  roles,
+  type DHCPObservation,
+  type Plan,
+  type Selection,
+} from "./model";
+import { rackLabel } from "./Rack";
 
 export function Inventory({
   plan,
+  observations,
   selection,
   select,
   navigate,
 }: {
   plan: Plan;
+  observations: DHCPObservation[];
   selection: Selection;
   select: (selection: Selection) => void;
   navigate: (floor: string) => void;
@@ -17,9 +26,20 @@ export function Inventory({
     value.toLowerCase().includes(query.toLowerCase());
   const deviceRow = (id: string) => {
     const device = plan.devices.find((device) => device.id === id)!;
+    const interfaces = (plan.interfaces ?? []).filter(
+      (item) => item.device === id,
+    );
+    const interfaceIDs = new Set(interfaces.map((item) => item.id));
+    const identityText = interfaces
+      .flatMap((item) => [item.name, item.domain, ...item.macAddresses])
+      .join(" ");
+    const observedText = observations
+      .filter((item) => interfaceIDs.has(item.interface))
+      .map((item) => `${item.address} ${item.hostname} ${item.clientId}`)
+      .join(" ");
     if (
       !matches(
-        `${device.name} ${device.model} ${device.address} ${roles[device.role]}`,
+        `${device.name} ${device.model} ${device.address} ${roles[device.role]} ${identityText} ${observedText}`,
       )
     )
       return null;
@@ -38,7 +58,10 @@ export function Inventory({
         </span>
         <span>
           <strong>{device.name}</strong>
-          <small>{roles[device.role]}</small>
+          <small>
+            {roles[device.role]}
+            {device.cabinet && device.rackUnit ? ` · ${rackLabel(device)}` : ""}
+          </small>
         </span>
       </button>
     );
@@ -53,7 +76,7 @@ export function Inventory({
         </h2>
         <input
           aria-label="Search equipment"
-          placeholder="Search name, model, address…"
+          placeholder="Search name, IP, MAC…"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />

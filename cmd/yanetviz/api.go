@@ -35,6 +35,7 @@ func (s *server) plan(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "expected one JSON document", 400)
 			return
 		}
+		p = p.NormalizeIdentities()
 		if err := p.Validate(); err != nil {
 			http.Error(w, err.Error(), 400)
 			return
@@ -140,6 +141,7 @@ func (s *server) validate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "expected one JSON document", 400)
 		return
 	}
+	p = p.NormalizeIdentities()
 	if err := p.Validate(); err != nil {
 		http.Error(w, err.Error(), 400)
 		return

@@ -45,11 +45,77 @@ workspace where Git metadata is unavailable.
    components and stops at unresolved terminations.
 7. Select **Save changes**. Reloading the page restores the saved documentation.
 
+In **Topology & cables**, use **Sort cables** to choose original order, label
+A–Z, or label Z–A. Alphabetic sorting ignores case, sorts embedded numbers
+naturally, and places unlabeled cables last. It only changes the display order.
+
+To document a rack, select a cabinet and set **Cabinet height (U)**. Select its
+equipment and enter **Equipment height (U)** and **Starting unit (bottom of
+equipment)**. U1 is at the bottom: a 2 U device starting at U3 occupies U3–U4.
+The cabinet panel shows a rack layout and identifies equipment whose mounting
+position is still unassigned. Blank values mean unknown height or unassigned position;
+existing plans start with these fields unknown. Whole numbers from 1 to 1000
+are supported. Save rejects overlapping equipment and equipment extending beyond
+a known cabinet height. With an unknown cabinet height, capacity cannot yet be
+checked. The initial layout assumes full-width equipment. Changing a device's
+cabinet, removing its cabinet, or making it mobile clears its starting unit but
+retains its equipment height.
+
+Cabinets and equipment both have an optional **Short name** for cable labels;
+blank values use the full name. In Edit mode, select **Auto-label cables…** in the
+toolbar, or **Auto-label cable…** in a cable's details. Review the proposed labels,
+select which to apply, then Save. Existing labels are kept unless **Allow
+replacement of existing labels** is enabled. Apply changes can be undone.
+
+Labels use `R01:U10:P05-R01:U12:P05` for cabinet equipment and
+`R01:U12:P05-PumpRoom:P01` or `PumpRoom:P01-ds01:P01` for standalone equipment.
+The starting rack unit identifies multi-unit equipment, and endpoint order stays
+A-to-B. Rack-unit numbers keep the U prefix and are padded to at least two
+digits: unit 3 becomes `U03`, for example `R01:U03:P05`. Simple port names such as `ether5` or `Port5` supply P05 automatically.
+SFP names such as `sfp1`, `SFP+1`, and `sfp-sfpplus1` supply `Psfp01`, keeping
+them distinct from copper `P01`. For example, a fiber label can be
+`R01:U10:Psfp01-R02:U12:Psfp01`. For custom names, set **Cable label port
+number** in the port details; an SFP connector preserves the Psfp prefix. Numbers
+need to be unique within each port type on the equipment. Front/rear passive
+terminals add F/R, such as P01F/P01R. Missing rack positions or port numbers and ambiguous
+labels are reported in the preview. Choose short names that are distinct and easy
+to read on printed labels. Renaming or moving equipment leaves existing cable
+labels intact until explicitly regenerated.
+
 Changes stay in the browser until Save. **Undo** retains the latest 30 edits.
 Save errors retain the working copy. If another tab saved first, download your
 working copy before reloading and reconciling the changes. The application does
 not silently merge competing edits. Navigation away from pending edits prompts
 in browsers that support the standard unsaved-changes warning.
+
+## Client interface identities
+
+Select equipment to inspect **Network interfaces**. In Edit mode, add an interface
+and document its name, **Network identity domain**, and **MAC aliases** (one per
+line). A physical device can have separate wired and Wi-Fi interfaces. Use the
+same domain for sources observing the same LAN; the initial household import uses
+`home`. MACs are normalized on save and must be unique within a domain. Adding a
+known randomized MAC as an alias is an explicit manual decision; client IDs,
+hostnames, and IPs never merge devices automatically.
+
+Use **Physical port (optional)** to link an interface to one of that equipment's
+documented ports. Leave it blank for Wi-Fi or an unknown mapping. Multiple logical
+interfaces can share a port. Port details list the linked interface names. When
+removing an uncabled port, the confirmation explains that its interface links
+will be cleared; the interface identities and DHCP observations remain intact.
+
+Each interface can show saved DHCP evidence: source/server, original client ID,
+observed MAC/IP/hostname, lease status, and first/last collection times. Client IDs
+remain opaque, optional values. An observation is a **snapshot**, not evidence
+that the client is currently online, connected wirelessly, or served by a
+particular AP. Different client IDs and DHCP sources retain separate evidence;
+older samples cannot overwrite newer IP/hostname observations. Collection does
+not rename equipment, move markers, or change documented cabling.
+
+Inventory search also matches interface MACs and observed IPs, hostnames, and
+client IDs. Use **Reload** to refresh saved observations. There is no scheduled
+polling yet. Old import notes remain as historical documentation; structured
+identities and DHCP evidence are maintained separately.
 
 The existing Basement, Entrance floor, Attic, and Garage SVGs are bundled as
 backgrounds. Replace a background with a PNG/JPEG up to 8 MiB and 64 megapixels;
@@ -60,19 +126,15 @@ resize the window. Zoom using the canvas controls and scroll to navigate a large
 plan; percentages are relative to the fitted view. Select **Fit** to restore the
 entire plan. The editor currently targets desktop screens.
 
-A new database includes the confirmed devices and backbone described in the
-design. Known cabinet membership and SW04 port labels are included, while exact
-cabinet positions, AP locations, unknown ports, and intermediate panel routing
-remain undocumented. No credentials are imported from `inventory.local.yaml`.
+A new database currently includes built-in starter equipment, cabinet groups, and
+cable drafts. This prototype seed is installation-specific; see
+`internal/plan/seed.go`. Existing databases retain their own saved documentation,
+and no credentials are imported from `inventory.local.yaml`.
 
-The working household database was enriched on 7 November 2026 with a one-time,
-read-only RouterOS port inventory: RT01 has 11 physical Ethernet/SFP ports, SW01
-28, SW02 6, and AP01/AP03/AP04 2 each. Existing documentation was preserved; SW04
-retains its 10 manual ports. Each newly added port records its snapshot source
-and time in its notes. This does not provide ongoing collection or determine
-cable endpoints. The owner-approved HTTP REST transport for these six sources
-is recorded in `DESIGN.md` and the private inventory; future work should honor
-that per-source choice without silently downgrading other sources from HTTPS.
+Keep deployment-specific inventory, collected observations, and approved
+management transports in private local files. `DESIGN.local.md`, when present,
+contains installation notes and is excluded from Git. `DESIGN.md` describes the
+application independently of any particular installation.
 
 ## Storage, export, and recovery
 
@@ -101,6 +163,21 @@ The initial schema uses relational foreign keys for ownership and endpoints,
 with JSON payloads for each entity's descriptive fields. Full-plan replacement
 keeps this small application's edit transaction simple. Later migrations can
 extract fields as query requirements grow. Existing databases are never reseeded.
+Rack dimensions and positions are optional entity fields, so older databases and
+plan exports remain readable without a SQL migration. Saving, exporting, and
+restoring retain the new fields alongside the rest of the documentation.
+
+SQLite schema version 2 adds interface identities and a separate DHCP observation
+table. Existing schema-1 databases are upgraded transactionally without changing
+their documentation or revision. Full database backups retain both identities
+and observations. Portable plan JSON/ZIP exports include interface identities
+and MAC aliases, but omit DHCP observations. Removing an interface, MAC alias,
+domain binding, or observation source removes dependent evidence when the plan is
+saved; the interface removal confirmation explains the affected observations.
+Regular plan saves retain evidence for surviving identities.
+Schema version 3 adds a nullable physical-port foreign key to interfaces and
+backfills it from any existing reference. Upgrading schema 1 or 2 preserves the
+plan revision and saved DHCP evidence. References are optional for older plans.
 
 ## Access and configuration
 
@@ -150,13 +227,20 @@ The same-origin API exposes:
 | `GET /api/plan` | Current documentation and revision |
 | `PUT /api/plan` | Validate and transactionally save a complete document |
 | `POST /api/validate` | Validate an import without changing saved state |
+| `POST /api/cable-labels/preview` | Preview labels from a complete working plan without saving it |
 | `GET /api/export` | Download the saved documentation archive |
+| `GET /api/observations/dhcp` | Read saved DHCP evidence separately from the manual plan |
+| `POST /api/observations/dhcp` | Validate and atomically record a batch without changing the manual plan revision |
 | `GET/POST/DELETE /api/session` | Session status, sign in, sign out |
 | `GET /api/health` | Readiness including database access |
 
 Save requires the current revision. An outdated revision returns HTTP 409;
 invalid documentation returns 400. Mutations require `X-Yanetviz: 1`. API requests
-are limited to 32 MiB. Plan format version and SQLite schema version start at 1.
+are limited to 32 MiB; DHCP observation batches are limited to 8 MiB and 10,000
+records. Plan format version remains 1 with an optional `interfaces` collection;
+SQLite schema version is 3. Observation records must reference a documented source
+device and an interface owning the observed domain/MAC. DHCP client IDs are
+preserved as supplied and do not act as matching keys.
 
 ## Remaining design work
 

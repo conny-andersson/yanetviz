@@ -1,14 +1,24 @@
+import { CableLabelButton } from "./CableLabels";
 import { Inventory } from "./Inventory";
-import { Topology } from "./Topology";
+import { Topology, type CableSort } from "./Topology";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CabinetEditor } from "./CabinetEditor";
 import { CableEditor } from "./CableEditor";
 import { DeviceEditor, type ChangePlan } from "./DeviceEditor";
 import { Map } from "./Map";
-import { api, download, uid, type Plan, type Selection } from "./model";
+import {
+  api,
+  download,
+  uid,
+  type DHCPObservation,
+  type Plan,
+  type Selection,
+} from "./model";
 
 export function App() {
   const [plan, setPlan] = useState<Plan | null>(null);
+  const [observations, setObservations] = useState<DHCPObservation[]>([]);
+  const [observationError, setObservationError] = useState("");
   const [saved, setSaved] = useState<Plan | null>(null);
   const [history, setHistory] = useState<Plan[]>([]);
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
@@ -20,6 +30,7 @@ export function App() {
   const [edit, setEdit] = useState(false);
   const [floor, setFloor] = useState("basement");
   const [view, setView] = useState("floor");
+  const [cableSort, setCableSort] = useState<CableSort>("original");
   const [selection, setSelection] = useState<Selection>(null);
   const [zoom, setZoom] = useState(1);
   const [showCables, setShowCables] = useState(true);
@@ -31,10 +42,25 @@ export function App() {
     setZoom(1);
   }, [floor]);
 
+  const loadObservations = useCallback(() => {
+    api<DHCPObservation[]>("/api/observations/dhcp")
+      .then((records) => {
+        setObservations(records);
+        setObservationError("");
+      })
+      .catch(() => {
+        setObservations([]);
+        setObservationError(
+          "DHCP observations could not be loaded. Documentation remains available.",
+        );
+      });
+  }, []);
+
   const load = useCallback(async () => {
     const current = await api<Plan>("/api/plan");
     setPlan(current);
     setSaved(current);
+    loadObservations();
     setHistory([]);
     setError("");
     setFloor((previous) =>
@@ -42,7 +68,7 @@ export function App() {
         ? previous
         : current.floors[0].id,
     );
-  }, []);
+  }, [loadObservations]);
 
   useEffect(() => {
     api<{ authenticated: boolean; loginRequired: boolean }>("/api/session")
@@ -79,6 +105,7 @@ export function App() {
       setPlan(next);
       setSaved(next);
       setHistory([]);
+      loadObservations();
       setNotice("Documentation saved");
     } catch (error) {
       setError(
@@ -350,6 +377,7 @@ export function App() {
       <div className="workspace" inert={saving}>
         <Inventory
           plan={plan}
+          observations={observations}
           selection={selection}
           select={setSelection}
           navigate={setFloor}
@@ -453,6 +481,7 @@ export function App() {
               <button onClick={() => add("device")}>+ Equipment</button>
               <button onClick={() => add("cabinet")}>+ Cabinet</button>
               <button onClick={() => add("cable")}>+ Cable</button>
+              <CableLabelButton plan={plan} change={change} />
               <span />
               <button onClick={() => backgroundInput.current?.click()}>
                 Replace background
@@ -492,7 +521,13 @@ export function App() {
               }
             />
           ) : (
-            <Topology plan={plan} selection={selection} select={setSelection} />
+            <Topology
+              plan={plan}
+              selection={selection}
+              select={setSelection}
+              cableSort={cableSort}
+              setCableSort={setCableSort}
+            />
           )}
           <footer className="canvas-footer">
             <span>
@@ -513,6 +548,8 @@ export function App() {
               key={device.id}
               device={device}
               plan={plan}
+              observations={observations}
+              observationError={observationError}
               edit={edit}
               floor={floor}
               change={change}

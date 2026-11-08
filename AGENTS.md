@@ -7,6 +7,9 @@ tradeoffs, and leave the code easier to understand and maintain.
 
 - Read `DESIGN.md` before making architectural or domain changes. It describes
   the intended application; some features may still be unimplemented.
+- When working with a configured installation, consult `DESIGN.local.md` if
+  present for local decisions and approved transports. Keep installation-specific
+  inventory and observations out of the shared design document.
 - Inspect the existing code and relevant documentation before editing. Preserve
   the user's work and follow established conventions when they are sound.
 - Carry authorized work through implementation and verification. Resolve routine,

@@ -74,7 +74,9 @@ func run() error {
 	mux.HandleFunc("/api/session", s.session)
 	mux.HandleFunc("/api/plan", s.protect(s.plan))
 	mux.HandleFunc("/api/validate", s.protect(s.validate))
+	mux.HandleFunc("/api/cable-labels/preview", s.protect(s.previewCableLabels))
 	mux.HandleFunc("/api/export", s.protect(s.export))
+	mux.HandleFunc("/api/observations/dhcp", s.protect(s.dhcpObservations))
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
 		if _, err := store.Load(); err != nil {
 			http.Error(w, "database unavailable", 503)

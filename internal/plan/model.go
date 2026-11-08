@@ -18,32 +18,40 @@ type Floor struct {
 // Cabinet groups equipment on a known floor. Placed distinguishes a known floor
 // from a documented position on that floor.
 type Cabinet struct {
-	Placed bool    `json:"placed"`
-	ID     string  `json:"id"`
-	Name   string  `json:"name"`
-	Floor  string  `json:"floor"`
-	X      float64 `json:"x"`
-	Y      float64 `json:"y"`
+	ShortName string  `json:"shortName,omitempty"`
+	HeightU   *int    `json:"heightU,omitempty"`
+	Placed    bool    `json:"placed"`
+	ID        string  `json:"id"`
+	Name      string  `json:"name"`
+	Floor     string  `json:"floor"`
+	X         float64 `json:"x"`
+	Y         float64 `json:"y"`
 }
 
 // Device is a user-documented physical device, independent of live observations.
 type Device struct {
-	ID      string  `json:"id"`
-	Name    string  `json:"name"`
-	Role    string  `json:"role"`
-	Model   string  `json:"model"`
-	Address string  `json:"address"`
-	Notes   string  `json:"notes"`
-	Mode    string  `json:"mode"`
-	Floor   string  `json:"floor"`
-	Cabinet string  `json:"cabinet"`
-	X       float64 `json:"x"`
-	Y       float64 `json:"y"`
+	ShortName string `json:"shortName,omitempty"`
+	// RackUnit is the lowest occupied unit, numbered from U1 at the bottom.
+	// Nil values preserve unknown dimensions and unassigned mounting positions.
+	RackUnit *int    `json:"rackUnit,omitempty"`
+	HeightU  *int    `json:"heightU,omitempty"`
+	ID       string  `json:"id"`
+	Name     string  `json:"name"`
+	Role     string  `json:"role"`
+	Model    string  `json:"model"`
+	Address  string  `json:"address"`
+	Notes    string  `json:"notes"`
+	Mode     string  `json:"mode"`
+	Floor    string  `json:"floor"`
+	Cabinet  string  `json:"cabinet"`
+	X        float64 `json:"x"`
+	Y        float64 `json:"y"`
 }
 
 // Port identifies one physical connector or one side of a passive position.
 // PoE fields describe configuration; they do not establish live power delivery.
 type Port struct {
+	LabelNumber *int   `json:"labelNumber,omitempty"`
 	ID          string `json:"id"`
 	Device      string `json:"device"`
 	Name        string `json:"name"`
@@ -84,14 +92,15 @@ type PassThrough struct {
 
 // Plan is the versioned documentation snapshot exchanged with the editor.
 type Plan struct {
-	Version      int           `json:"version"`
-	Revision     int64         `json:"revision"`
-	Floors       []Floor       `json:"floors"`
-	Cabinets     []Cabinet     `json:"cabinets"`
-	Devices      []Device      `json:"devices"`
-	Ports        []Port        `json:"ports"`
-	Cables       []Cable       `json:"cables"`
-	PassThroughs []PassThrough `json:"passThroughs"`
+	Interfaces   []NetworkInterface `json:"interfaces,omitempty"`
+	Version      int                `json:"version"`
+	Revision     int64              `json:"revision"`
+	Floors       []Floor            `json:"floors"`
+	Cabinets     []Cabinet          `json:"cabinets"`
+	Devices      []Device           `json:"devices"`
+	Ports        []Port             `json:"ports"`
+	Cables       []Cable            `json:"cables"`
+	PassThroughs []PassThrough      `json:"passThroughs"`
 }
 
 // Validate enforces documentation invariants before import or transactional save.
@@ -140,6 +149,9 @@ func (p Plan) Validate() error {
 		if !name(c.Name) || !floors[c.Floor] || !xy(c.X, c.Y) {
 			return errors.New("invalid cabinet placement")
 		}
+		if len(c.ShortName) > 100 {
+			return fmt.Errorf("cabinet %q: short name must be at most 100 characters", c.Name)
+		}
 		cabinets[c.ID] = c
 	}
 	for _, d := range p.Devices {
@@ -151,6 +163,9 @@ func (p Plan) Validate() error {
 		}
 		if d.Floor != "" && !floors[d.Floor] {
 			return errors.New("unknown floor")
+		}
+		if len(d.ShortName) > 100 {
+			return fmt.Errorf("equipment %q: short name must be at most 100 characters", d.Name)
 		}
 		if d.Cabinet != "" {
 			if _, ok := cabinets[d.Cabinet]; !ok {
@@ -168,6 +183,12 @@ func (p Plan) Validate() error {
 		}
 		devices[d.ID] = d
 	}
+	if err := p.validateInterfaces(id, devices); err != nil {
+		return err
+	}
+	if err := p.validateRackMounting(); err != nil {
+		return err
+	}
 	portNames := map[string]bool{}
 	for _, port := range p.Ports {
 		if err := id(port.ID); err != nil {
@@ -175,6 +196,9 @@ func (p Plan) Validate() error {
 		}
 		if _, ok := devices[port.Device]; !ok {
 			return errors.New("port has unknown device")
+		}
+		if port.LabelNumber != nil && (*port.LabelNumber < 1 || *port.LabelNumber > 9999) {
+			return fmt.Errorf("port %q: cable label number must be between 1 and 9999", port.Name)
 		}
 		k := port.Device + "/" + port.Name
 		if !name(port.Name) || portNames[k] {

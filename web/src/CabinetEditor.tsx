@@ -1,4 +1,5 @@
-import { SelectField, TextField } from "./Fields";
+import { SelectField, TextField, UnitField } from "./Fields";
+import { RackElevation, rackLabel } from "./Rack";
 import { type Cabinet, type Plan, type Selection } from "./model";
 import type { ChangePlan } from "./DeviceEditor";
 
@@ -36,6 +37,12 @@ export function CabinetEditor({
         onChange={(name) => patch({ name })}
         disabled={!edit}
       />
+      <TextField
+        label="Short name (optional)"
+        value={c.shortName ?? ""}
+        onChange={(shortName) => patch({ shortName })}
+        disabled={!edit}
+      />
       <SelectField
         label="Floor"
         value={c.floor}
@@ -44,6 +51,12 @@ export function CabinetEditor({
           label: floor.name,
         }))}
         onChange={(floor) => patch({ floor, placed: false })}
+        disabled={!edit}
+      />
+      <UnitField
+        label="Cabinet height (U)"
+        value={c.heightU}
+        onChange={(heightU) => patch({ heightU })}
         disabled={!edit}
       />
       <p className="help">
@@ -58,6 +71,16 @@ export function CabinetEditor({
             : "Place cabinet on floor plan"}
         </button>
       )}
+      <h3>Rack layout{c.heightU ? ` · ${c.heightU} U` : ""}</h3>
+      <RackElevation
+        cabinet={c}
+        members={members}
+        select={(id) => select({ kind: "device", id })}
+      />
+      <p className="help">
+        U1 is at the bottom. Select equipment to document its height and
+        starting unit. Unassigned equipment does not occupy rack space.
+      </p>
       <h3>
         Equipment <small>{members.length}</small>
       </h3>
@@ -67,7 +90,10 @@ export function CabinetEditor({
           key={device.id}
           onClick={() => select({ kind: "device", id: device.id })}
         >
-          {device.name}
+          <span>
+            {device.name}
+            <small>{rackLabel(device)}</small>
+          </span>
           <span>→</span>
         </button>
       ))}
@@ -90,7 +116,7 @@ export function CabinetEditor({
               cabinets: plan.cabinets.filter((cabinet) => cabinet.id !== c.id),
               devices: plan.devices.map((device) =>
                 device.cabinet === c.id
-                  ? { ...device, cabinet: "", floor: "" }
+                  ? { ...device, cabinet: "", floor: "", rackUnit: null }
                   : device,
               ),
             }));

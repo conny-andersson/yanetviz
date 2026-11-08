@@ -28,10 +28,17 @@ func Open(path string, seed Plan) (*Store, error) {
 	if err := db.QueryRow("PRAGMA user_version").Scan(&schemaVersion); err != nil {
 		return fail(err)
 	}
-	if schemaVersion > 1 {
+	if schemaVersion > 3 {
 		return fail(fmt.Errorf("database schema %d is newer than this application supports", schemaVersion))
 	}
-	_, err = db.Exec(`PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;
+	if _, err = db.Exec(`PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;`); err != nil {
+		return fail(err)
+	}
+	migration, err := db.Begin()
+	if err != nil {
+		return fail(err)
+	}
+	_, err = migration.Exec(`
  CREATE TABLE IF NOT EXISTS metadata (id INTEGER PRIMARY KEY CHECK(id=1), version INTEGER NOT NULL, revision INTEGER NOT NULL);
  CREATE TABLE IF NOT EXISTS floors (id TEXT PRIMARY KEY, payload TEXT NOT NULL);
  CREATE TABLE IF NOT EXISTS cabinets (id TEXT PRIMARY KEY, floor TEXT NOT NULL REFERENCES floors(id), payload TEXT NOT NULL);
@@ -39,8 +46,26 @@ func Open(path string, seed Plan) (*Store, error) {
  CREATE TABLE IF NOT EXISTS ports (id TEXT PRIMARY KEY, device TEXT NOT NULL REFERENCES devices(id), payload TEXT NOT NULL);
  CREATE TABLE IF NOT EXISTS cables (id TEXT PRIMARY KEY, a_device TEXT NOT NULL REFERENCES devices(id), b_device TEXT NOT NULL REFERENCES devices(id), a_port TEXT REFERENCES ports(id), b_port TEXT REFERENCES ports(id), payload TEXT NOT NULL);
  CREATE TABLE IF NOT EXISTS pass_throughs (id TEXT PRIMARY KEY, a TEXT NOT NULL REFERENCES ports(id), b TEXT NOT NULL REFERENCES ports(id), payload TEXT NOT NULL);
- PRAGMA user_version=1;`)
+ CREATE TABLE IF NOT EXISTS interfaces (id TEXT PRIMARY KEY, device TEXT NOT NULL REFERENCES devices(id), payload TEXT NOT NULL);
+ CREATE TABLE IF NOT EXISTS dhcp_observations (
+ interface_id TEXT NOT NULL REFERENCES interfaces(id),
+ source_id TEXT NOT NULL REFERENCES devices(id),
+ server TEXT NOT NULL, mac TEXT NOT NULL, client_id TEXT NOT NULL, payload TEXT NOT NULL,
+ PRIMARY KEY(interface_id,source_id,server,mac,client_id));
+`)
 	if err != nil {
+		return fail(errors.Join(err, migration.Rollback()))
+	}
+	if schemaVersion < 3 {
+		if _, err = migration.Exec(`ALTER TABLE interfaces ADD COLUMN port TEXT REFERENCES ports(id);
+            UPDATE interfaces SET port=NULLIF(json_extract(payload,'$.port'),'');`); err != nil {
+			return fail(errors.Join(err, migration.Rollback()))
+		}
+	}
+	if _, err = migration.Exec("PRAGMA user_version=3"); err != nil {
+		return fail(errors.Join(err, migration.Rollback()))
+	}
+	if err = migration.Commit(); err != nil {
 		return fail(err)
 	}
 	s := &Store{db}
@@ -89,6 +114,15 @@ func (s *Store) Load() (Plan, error) {
 		return Plan{}, err
 	}
 	defer tx.Rollback()
+	document, err := loadPlan(tx)
+	if err != nil {
+		return document, err
+	}
+	return document, tx.Commit()
+}
+
+func loadPlan(tx *sql.Tx) (Plan, error) {
+	var err error
 	p := Plan{}
 	if err = tx.QueryRow("SELECT version,revision FROM metadata WHERE id=1").Scan(&p.Version, &p.Revision); err != nil {
 		return p, err
@@ -102,6 +136,9 @@ func (s *Store) Load() (Plan, error) {
 	if p.Devices, err = readRows[Device](tx, "devices"); err != nil {
 		return p, err
 	}
+	if p.Interfaces, err = readRows[NetworkInterface](tx, "interfaces"); err != nil {
+		return p, err
+	}
 	if p.Ports, err = readRows[Port](tx, "ports"); err != nil {
 		return p, err
 	}
@@ -111,7 +148,7 @@ func (s *Store) Load() (Plan, error) {
 	if p.PassThroughs, err = readRows[PassThrough](tx, "pass_throughs"); err != nil {
 		return p, err
 	}
-	return p, tx.Commit()
+	return p, nil
 }
 func nullable(s string) any {
 	if s == "" {
@@ -127,6 +164,7 @@ func (s *Store) Save(p Plan) error {
 }
 
 func (s *Store) save(p Plan, initial bool) error {
+	p = p.NormalizeIdentities()
 	if err := p.Validate(); err != nil {
 		return err
 	}
@@ -151,7 +189,12 @@ func (s *Store) save(p Plan, initial bool) error {
 	if err != nil {
 		return err
 	}
-	for _, t := range []string{"pass_throughs", "cables", "ports", "devices", "cabinets", "floors"} {
+	// Preserve observations while stable source/interface IDs are replaced below.
+	// Deferred checks let the whole-plan edit remain one atomic transaction.
+	if _, err = tx.Exec("PRAGMA defer_foreign_keys=ON"); err != nil {
+		return err
+	}
+	for _, t := range []string{"pass_throughs", "cables", "ports", "interfaces", "devices", "cabinets", "floors"} {
 		if _, err = tx.Exec("DELETE FROM " + t); err != nil {
 			return err
 		}
@@ -181,6 +224,11 @@ func (s *Store) save(p Plan, initial bool) error {
 			return err
 		}
 	}
+	for _, v := range p.Interfaces {
+		if err = insert("INSERT INTO interfaces(id,device,port,payload) VALUES(?,?,?,?)", v, v.ID, v.Device, nullable(v.Port)); err != nil {
+			return err
+		}
+	}
 	for _, v := range p.Ports {
 		if err = insert("INSERT INTO ports VALUES(?,?,?)", v, v.ID, v.Device); err != nil {
 			return err
@@ -195,6 +243,9 @@ func (s *Store) save(p Plan, initial bool) error {
 		if err = insert("INSERT INTO pass_throughs VALUES(?,?,?,?)", v, v.ID, v.A, v.B); err != nil {
 			return err
 		}
+	}
+	if err = pruneOrphanedObservations(tx, p); err != nil {
+		return err
 	}
 	if err = tx.Commit(); err != nil {
 		return fmt.Errorf("commit plan: %w", err)

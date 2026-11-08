@@ -1,3 +1,4 @@
+import { CableLabelButton } from "./CableLabels";
 import { Field, SelectField, TextField } from "./Fields";
 import {
   endpoint,
@@ -103,6 +104,7 @@ export function CableEditor({
         onChange={(label) => patch({ label })}
         disabled={!edit}
       />
+      {edit && <CableLabelButton plan={p} cableId={c.id} change={change} />}
       <SelectField
         label="Medium"
         value={c.medium}

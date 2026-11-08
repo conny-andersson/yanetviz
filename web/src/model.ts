@@ -1,5 +1,7 @@
 export type Floor = { id: string; name: string; background: string };
 export type Cabinet = {
+  shortName?: string;
+  heightU?: number | null;
   id: string;
   name: string;
   floor: string;
@@ -8,6 +10,9 @@ export type Cabinet = {
   placed: boolean;
 };
 export type Device = {
+  shortName?: string;
+  heightU?: number | null;
+  rackUnit?: number | null;
   id: string;
   name: string;
   role: string;
@@ -21,6 +26,7 @@ export type Device = {
   y: number;
 };
 export type Port = {
+  labelNumber?: number | null;
   id: string;
   device: string;
   name: string;
@@ -45,7 +51,30 @@ export type Cable = {
   draft: boolean;
 };
 export type PassThrough = { id: string; a: string; b: string };
+export type NetworkInterface = {
+  port?: string;
+  id: string;
+  device: string;
+  name: string;
+  domain: string;
+  macAddresses: string[];
+};
+export type DHCPObservation = {
+  interface: string;
+  domain: string;
+  source: string;
+  server: string;
+  macAddress: string;
+  clientId: string;
+  clientIdField?: string;
+  address: string;
+  hostname: string;
+  status: string;
+  firstSeen: string;
+  lastSeen: string;
+};
 export type Plan = {
+  interfaces?: NetworkInterface[];
   version: number;
   revision: number;
   floors: Floor[];

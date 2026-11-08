@@ -423,6 +423,7 @@ small {
 }
 .creation-toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 7px;
   padding: 10px 19px;
@@ -841,6 +842,22 @@ small {
 .cable-register {
   margin-top: 30px;
 }
+.cable-register > .section-heading {
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.cable-sort {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: #73887a;
+}
+.cable-sort select {
+  width: auto;
+  padding: 6px 8px;
+  font-size: 11px;
+}
 .cable-register-row {
   display: flex;
   width: 100%;
@@ -960,4 +977,168 @@ small {
   .canvas-controls .checkbox {
     display: none;
   }
+}
+
+.rack-scroll {
+  max-height: 380px;
+  overflow: auto;
+  border: 1px solid #dce4dd;
+  border-radius: 6px;
+  margin: 12px 0;
+  background: #f8faf8;
+}
+.rack-elevation {
+  display: grid;
+  grid-template-columns: 35px minmax(0, 1fr);
+  padding: 6px;
+  gap: 2px 4px;
+}
+.rack-row {
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
+  font-size: 10px;
+  color: #7a8e80;
+  align-items: stretch;
+}
+.rack-row > span:first-child {
+  align-self: center;
+  text-align: right;
+  padding-right: 4px;
+}
+.rack-empty {
+  border: 1px dashed #dce4dd;
+  border-radius: 3px;
+}
+.rack-device {
+  z-index: 1;
+  background: #e6f1e9;
+  border-color: #b1cdbb;
+  padding: 3px 6px;
+  text-align: left;
+  justify-content: flex-start;
+  min-width: 0;
+}
+.rack-device strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
+.rack-device small {
+  font-size: 9px;
+  font-weight: 450;
+  color: #60806a;
+}
+.connection-row > span > small {
+  display: block;
+  margin-top: 4px;
+}
+
+.cable-label-dialog {
+  width: min(820px, 90vw);
+  max-height: 85dvh;
+  border: 1px solid #c9d9cd;
+  border-radius: 10px;
+  padding: 24px;
+  color: #26353b;
+  box-shadow: 0 16px 70px #10271d40;
+}
+.cable-label-dialog::backdrop {
+  background: #182d2860;
+}
+.cable-label-dialog .section-heading {
+  margin-top: 0;
+}
+.label-preview-list {
+  max-height: 50dvh;
+  overflow: auto;
+  margin: 18px 0;
+  border-top: 1px solid #dce4dd;
+}
+.label-preview-row {
+  display: flex;
+  gap: 12px;
+  padding: 14px 4px;
+  border-bottom: 1px solid #e4ebe5;
+}
+.label-preview-row > input {
+  width: auto;
+  flex-shrink: 0;
+  align-self: flex-start;
+  margin-top: 4px;
+  accent-color: #2f6a51;
+}
+.label-preview-row > div {
+  min-width: 0;
+}
+.label-preview-row code {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  padding-top: 5px;
+  color: #2b6847;
+}
+.label-preview-row .help {
+  margin: 5px 0;
+}
+.label-endpoints {
+  font-size: 11px;
+  color: #73887a;
+}
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.interface-card {
+  border: 1px solid #dce4dd;
+  border-radius: 6px;
+  margin: 10px 0;
+}
+.interface-card > summary {
+  cursor: pointer;
+  padding: 12px 10px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  background: #f6f9f6;
+}
+.interface-card > summary small {
+  display: block;
+  margin: 5px 0 0 14px;
+  font-size: 9px;
+  color: #82988a;
+}
+.interface-details {
+  padding: 12px 10px;
+}
+.interface-details h4 {
+  font-size: 12px;
+  margin: 20px 0 8px;
+}
+.dhcp-evidence {
+  padding: 12px 8px;
+  margin-top: 12px;
+  background: #f6f9f7;
+  border-radius: 5px;
+}
+.dhcp-evidence dl {
+  margin: 12px 0 0;
+  font-size: 10px;
+}
+.dhcp-evidence dt {
+  color: #82988a;
+  margin-top: 9px;
+}
+.dhcp-evidence dd {
+  margin: 3px 0 0;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+.dhcp-evidence dd small {
+  display: block;
+  color: #82988a;
+  font-size: 9px;
 }

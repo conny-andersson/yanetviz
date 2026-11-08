@@ -60,6 +60,18 @@ func TestValidationDoesNotPersistImport(t *testing.T) {
 
 func TestExportContainsRestorablePlanAndBackgrounds(t *testing.T) {
 	document := plan.Seed()
+	document.Interfaces = []plan.NetworkInterface{{ID: plan.NewID(), Device: document.Devices[4].ID, Name: "Wi-Fi", Domain: "home", MACAddresses: []string{"02:11:22:33:44:55"}}}
+	physical := plan.Port{ID: plan.NewID(), Device: document.Devices[4].ID, Name: "ether1", PoEMode: "unknown"}
+	document.Ports = append(document.Ports, physical)
+	document.Interfaces[0].Port = physical.ID
+	cabinetHeight, equipmentHeight, startingUnit := 12, 2, 3
+	document.Cabinets[0].HeightU = &cabinetHeight
+	document.Cabinets[0].ShortName = "R01"
+	document.Devices[0].ShortName = "rt01"
+	labelNumber := 25
+	document.Ports[0].LabelNumber = &labelNumber
+	document.Devices[0].HeightU = &equipmentHeight
+	document.Devices[0].RackUnit = &startingUnit
 	var buffer bytes.Buffer
 	if err := writeExport(&buffer, document); err != nil {
 		t.Fatal(err)
@@ -138,5 +150,41 @@ func TestPasswordLoginProtectsPlanAndCreatesPrivateSession(t *testing.T) {
 	s.session(logout, request)
 	if s.authorized(request) {
 		t.Fatal("session survived logout")
+	}
+}
+
+func TestLabelPreviewUsesWorkingCopyWithoutSaving(t *testing.T) {
+	s := testServer(t)
+	before, err := s.store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	candidate, err := s.store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	candidate.Cabinets[0].ShortName = "WorkingRack"
+	body, err := json.Marshal(candidate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := httptest.NewRecorder()
+	s.previewCableLabels(response, httptest.NewRequest(http.MethodPost, "/api/cable-labels/preview", bytes.NewReader(body)))
+	if response.Code != http.StatusOK {
+		t.Fatalf("preview: %d %s", response.Code, response.Body.String())
+	}
+	var previews []plan.CableLabelPreview
+	if err := json.Unmarshal(response.Body.Bytes(), &previews); err != nil {
+		t.Fatal(err)
+	}
+	if len(previews) != len(candidate.Cables) {
+		t.Fatal("missing per-cable label results")
+	}
+	after, err := s.store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(before, after) {
+		t.Fatal("label preview saved working copy changes")
 	}
 }

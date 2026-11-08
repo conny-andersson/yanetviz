@@ -1,11 +1,14 @@
+import { InterfaceEditor } from "./InterfaceEditor";
 import { useState } from "react";
 import { Field, SelectField, TextField } from "./Fields";
+import { RackMountFields } from "./Rack";
 import {
   endpoint,
   location,
   passive,
   roles,
   uid,
+  type DHCPObservation,
   type Device,
   type Plan,
   type Port,
@@ -17,6 +20,8 @@ export type ChangePlan = (update: (plan: Plan) => Plan) => void;
 type Props = {
   device: Device;
   plan: Plan;
+  observations: DHCPObservation[];
+  observationError?: string;
   edit: boolean;
   floor: string;
   change: ChangePlan;
@@ -26,6 +31,8 @@ type Props = {
 export function DeviceEditor({
   device: d,
   plan: p,
+  observations,
+  observationError,
   edit,
   floor,
   change,
@@ -116,9 +123,16 @@ export function DeviceEditor({
   }
 
   function deleteDevice() {
+    const interfaces = (p.interfaces ?? []).filter(
+      (item) => item.device === d.id,
+    );
+    const interfaceIDs = new Set(interfaces.map((item) => item.id));
+    const affectedObservations = observations.filter(
+      (item) => interfaceIDs.has(item.interface) || item.source === d.id,
+    ).length;
     if (
       !window.confirm(
-        `Delete ${d.name}? This removes its placement, ${ports.length} ports, their internal pass-throughs, and ${cables.length} cables.`,
+        `Delete ${d.name}? This removes its placement, ${ports.length} ports, their internal pass-throughs, and ${cables.length} cables, ${interfaces.length} interface identities, and ${affectedObservations} associated/source DHCP observations.`,
       )
     )
       return;
@@ -126,6 +140,9 @@ export function DeviceEditor({
     change((plan) => ({
       ...plan,
       devices: plan.devices.filter((device) => device.id !== d.id),
+      interfaces: (plan.interfaces ?? []).filter(
+        (item) => item.device !== d.id,
+      ),
       ports: plan.ports.filter((port) => port.device !== d.id),
       cables: plan.cables.filter(
         (cable) => cable.a.device !== d.id && cable.b.device !== d.id,
@@ -149,6 +166,12 @@ export function DeviceEditor({
         label="Friendly name"
         value={d.name}
         onChange={(name) => patch({ name })}
+        disabled={!edit}
+      />
+      <TextField
+        label="Short name (optional)"
+        value={d.shortName ?? ""}
+        onChange={(shortName) => patch({ shortName })}
         disabled={!edit}
       />
       <SelectField
@@ -180,6 +203,14 @@ export function DeviceEditor({
         disabled={!edit}
         multiline
       />
+      <InterfaceEditor
+        device={d}
+        plan={p}
+        observations={observations}
+        observationError={observationError}
+        edit={edit}
+        change={change}
+      />
       <h3>Placement</h3>
       <SelectField
         label="Placement mode"
@@ -188,7 +219,9 @@ export function DeviceEditor({
           { value: "fixed", label: "Fixed equipment" },
           { value: "mobile", label: "Mobile / location unknown" },
         ]}
-        onChange={(mode) => patch({ mode, floor: "", cabinet: "" })}
+        onChange={(mode) =>
+          patch({ mode, floor: "", cabinet: "", rackUnit: null })
+        }
         disabled={!edit}
       />
       {d.mode === "fixed" && (
@@ -203,9 +236,14 @@ export function DeviceEditor({
                 label: cabinet.name,
               })),
             ]}
-            onChange={(cabinet) => patch({ cabinet, floor: "" })}
+            onChange={(cabinet) =>
+              patch({ cabinet, floor: "", rackUnit: null })
+            }
             disabled={!edit}
           />
+          {d.cabinet && (
+            <RackMountFields device={d} disabled={!edit} patch={patch} />
+          )}
           {!d.cabinet && (
             <SelectField
               label="Floor"
@@ -272,6 +310,9 @@ export function DeviceEditor({
         const other = p.ports.find(
           (other) => other.id === (pair?.a === port.id ? pair?.b : pair?.a),
         );
+        const linkedInterfaces = (p.interfaces ?? []).filter(
+          (item) => item.port === port.id,
+        );
         return (
           <div className="port-card" key={port.id}>
             <button
@@ -292,6 +333,31 @@ export function DeviceEditor({
                   onChange={(name) => updatePort(port.id, { name })}
                   disabled={!edit}
                 />
+                <Field label="Cable label port number (optional)">
+                  <input
+                    type="number"
+                    min="1"
+                    max="9999"
+                    step="1"
+                    value={port.labelNumber ?? ""}
+                    disabled={!edit}
+                    placeholder="Auto for etherN / PortN / sfpN"
+                    onChange={(event) =>
+                      updatePort(port.id, {
+                        labelNumber:
+                          event.target.value === ""
+                            ? null
+                            : Number(event.target.value),
+                      })
+                    }
+                  />
+                </Field>
+                <p className="help">
+                  Copper ports use P01; SFP ports use Psfp01. Names such as
+                  sfp1, SFP+1, and sfp-sfpplus1 are recognized automatically.
+                  Set a number for custom names; an SFP connector keeps the Psfp
+                  prefix. Passive terminals add F/R for front/rear.
+                </p>
                 <TextField
                   label="Label"
                   value={port.label}
@@ -361,6 +427,12 @@ export function DeviceEditor({
                   disabled={!edit}
                   multiline
                 />
+                {linkedInterfaces.length > 0 && (
+                  <p className="help">
+                    Network interfaces:{" "}
+                    {linkedInterfaces.map((item) => item.name).join(", ")}
+                  </p>
+                )}
                 {attached ? (
                   <button
                     className="link-button"
@@ -378,13 +450,16 @@ export function DeviceEditor({
                     onClick={() => {
                       if (
                         !window.confirm(
-                          `Delete ${port.name}${pair ? " and its internal mapping" : ""}?`,
+                          `Delete ${port.name}${pair ? " and its internal mapping" : ""}?${linkedInterfaces.length ? ` This unlinks ${linkedInterfaces.length} network interface(s); their identities and DHCP evidence will be retained.` : ""}`,
                         )
                       )
                         return;
                       change((plan) => ({
                         ...plan,
                         ports: plan.ports.filter((item) => item.id !== port.id),
+                        interfaces: (plan.interfaces ?? []).map((item) =>
+                          item.port === port.id ? { ...item, port: "" } : item,
+                        ),
                         passThroughs: plan.passThroughs.filter(
                           (item) => item.a !== port.id && item.b !== port.id,
                         ),

@@ -19,6 +19,12 @@ func TestDocumentationSurvivesReopen(t *testing.T) {
 		t.Fatal(err)
 	}
 	document.Devices[0].Name = "Basement router"
+	document.Cabinets[0].HeightU = rackUnits(12)
+	document.Cabinets[0].ShortName = "R01"
+	document.Devices[0].ShortName = "rt01"
+	document.Ports[0].LabelNumber = rackUnits(25)
+	document.Devices[0].HeightU = rackUnits(2)
+	document.Devices[0].RackUnit = rackUnits(3)
 	document.Devices[4].Floor = "entrance"
 	document.Devices[4].X, document.Devices[4].Y = .23, .71
 	if err := store.Save(document); err != nil {
