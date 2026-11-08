@@ -130,7 +130,7 @@ export function Inventory({
       </div>
       <div className="inventory-footer">
         <span className="status-dot" />
-        Local plan · no live collection
+        Physical plan · observations separate
       </div>
     </aside>
   );

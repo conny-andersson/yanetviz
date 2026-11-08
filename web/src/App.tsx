@@ -15,6 +15,9 @@ import {
   type Selection,
 } from "./model";
 
+import { useWiFi } from "./wifi";
+import { WiFiOverview } from "./WiFiOverview";
+
 export function App() {
   const [plan, setPlan] = useState<Plan | null>(null);
   const [observations, setObservations] = useState<DHCPObservation[]>([]);
@@ -37,6 +40,7 @@ export function App() {
   const importInput = useRef<HTMLInputElement>(null);
   const backgroundInput = useRef<HTMLInputElement>(null);
   const dirty = plan !== saved;
+  const wireless = useWiFi(authenticated);
 
   useEffect(() => {
     setZoom(1);
@@ -320,7 +324,11 @@ export function App() {
         </div>
         <div className="project-status">
           <span className="status-dot" />
-          Manual documentation <span className="subtle">/</span>{" "}
+          Manual plan ·{" "}
+          {wireless.view.sources.some((source) => source.state === "fresh")
+            ? "Wi-Fi live"
+            : "Wi-Fi observations"}{" "}
+          <span className="subtle">/</span>{" "}
           <span>
             {dirty ? "Unsaved changes" : `Saved · revision ${plan.revision}`}
           </span>
@@ -396,6 +404,12 @@ export function App() {
                 onClick={() => setView("topology")}
               >
                 Topology & cables
+              </button>
+              <button
+                className={view === "wifi" ? "active" : ""}
+                onClick={() => setView("wifi")}
+              >
+                Wi-Fi collection
               </button>
             </nav>
             <div className="edit-actions">
@@ -522,10 +536,18 @@ export function App() {
               </button>
             </div>
           )}
-          {view === "floor" ? (
+          {view === "wifi" ? (
+            <WiFiOverview
+              plan={plan}
+              wifi={wireless.view}
+              error={wireless.error}
+              select={setSelection}
+            />
+          ) : view === "floor" ? (
             <Map
               key={floor}
               plan={plan}
+              wifi={wireless.view}
               floor={floor}
               edit={edit}
               selection={selection}
@@ -570,7 +592,7 @@ export function App() {
             <span>
               <i className="line copper" />
               Copper <i className="line fiber" />
-              Fiber
+              Fiber <i className="line wifi" /> Wi-Fi
             </span>
           </footer>
         </main>
@@ -579,6 +601,7 @@ export function App() {
             <DeviceEditor
               key={device.id}
               device={device}
+              wifi={wireless.view}
               plan={plan}
               observations={observations}
               observationError={observationError}

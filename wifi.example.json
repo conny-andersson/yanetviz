@@ -1,0 +1,17 @@
+{
+  "pollSeconds": 15,
+  "sources": [
+    {
+      "id": "main-capsman",
+      "device": "documented-controller-device-uuid",
+      "domain": "home",
+      "address": "192.0.2.1",
+      "transport": "rest-https",
+      "username": "monitor",
+      "passwordFile": "secrets/router-password",
+      "radios": {
+        "02:11:22:33:44:55": "documented-ap-device-uuid"
+      }
+    }
+  ]
+}

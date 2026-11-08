@@ -1184,3 +1184,72 @@ small {
 .route-handle {
   cursor: move;
 }
+
+.wifi-overview {
+  padding: 20px;
+  overflow: auto;
+  flex: 1;
+}
+.wifi-overview table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.wifi-overview th,
+.wifi-overview td {
+  padding: 10px;
+  text-align: left;
+  border-bottom: 1px solid #dce2e3;
+}
+.wifi-source {
+  background: #f5f8f6;
+  border: 1px solid #dce2e3;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+.wifi-details {
+  border-top: 1px solid #dce2e3;
+  margin-top: 16px;
+}
+.wifi-details ul {
+  padding-left: 18px;
+}
+.wifi-details li {
+  margin-bottom: 14px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.wireless-link path {
+  stroke: #5871b0;
+  stroke-width: 2;
+  stroke-dasharray: 9 6;
+  fill: none;
+  pointer-events: none;
+}
+.wireless-link.stale path {
+  stroke: #858c91;
+}
+.wireless-link text {
+  font-size: 11px;
+  fill: #455d8d;
+  paint-order: stroke;
+  stroke: #fff;
+  stroke-width: 3;
+  pointer-events: none;
+}
+.wireless-portal {
+  cursor: pointer;
+}
+.wireless-portal circle {
+  fill: #fff;
+  stroke: #5871b0;
+  stroke-width: 2;
+}
+.wireless-portal text {
+  pointer-events: auto;
+}
+.line.wifi {
+  height: 0;
+  background: none;
+  border-top: 2px dashed #5871b0;
+}

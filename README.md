@@ -1,7 +1,7 @@
 # Yanetviz
 
-A local web application for documenting a home network on floor plans. This first
-increment focuses on the manual physical plan. The intended full application is
+A local web application for documenting a home network on floor plans, with
+optional live Wi-Fi observations from MikroTik WiFi CAPsMAN. The intended full application is
 described in [DESIGN.md](DESIGN.md); contributor guidance is in [AGENTS.md](AGENTS.md).
 
 ## Run locally
@@ -113,8 +113,7 @@ older samples cannot overwrite newer IP/hostname observations. Collection does
 not rename equipment, move markers, or change documented cabling.
 
 Inventory search also matches interface MACs and observed IPs, hostnames, and
-client IDs. Use **Reload** to refresh saved observations. There is no scheduled
-polling yet. Old import notes remain as historical documentation; structured
+client IDs. Use **Reload** to refresh saved observations. DHCP evidence is not refreshed automatically yet; Wi-Fi polling is configured separately below. Old import notes remain as historical documentation; structured
 identities and DHCP evidence are maintained separately.
 
 The existing Basement, Entrance floor, Attic, and Garage SVGs are bundled as
@@ -135,6 +134,74 @@ Keep deployment-specific inventory, collected observations, and approved
 management transports in private local files. `DESIGN.local.md`, when present,
 contains installation notes and is excluded from Git. `DESIGN.md` describes the
 application independently of any particular installation.
+
+## WiFi CAPsMAN collection
+
+Optional read-only collection supports the modern RouterOS
+[`/interface/wifi` CAPsMAN tables](https://manual.mikrotik.com/docs/wireless/wifi/).
+Configure the controller as the registration source; managed APs do not need
+individual registration polling. Legacy `/caps-man` and `/interface/wireless`
+collectors are not implemented in this increment.
+
+Copy `wifi.example.json` to a private location and replace its example addresses
+and UUIDs. Device UUIDs are available in a working-copy plan download. Create a
+separate password file readable only by the application user. Set `passwordFile`
+to its path, relative to the configuration file or absolute. Keep configuration
+and passwords outside source control and portable plan exports. The application
+does not parse `inventory.local.yaml` or expose credentials through its API.
+
+```sh
+./yanetviz -listen 127.0.0.1:8080 -data ./data -wifi-config /path/to/wifi.json
+```
+
+Omit `-wifi-config` to disable collection. HTTPS is the default and verifies the
+system trust store; redirects and silent HTTP fallback are refused. An explicitly
+approved HTTP source can use `transport: "rest-http"`. This sends Basic credentials
+unencrypted and must be an intentional installation decision. Only fixed GET
+requests with non-secret property allowlists are sent to configured endpoints.
+See the [RouterOS REST API contract](https://manual.mikrotik.com/docs/developer-guides/rest-api/).
+
+Map each physical `radio-mac` to its documented AP UUID in `radios`. Verify these
+MACs against that AP's inventory. Controller-local radios automatically map to
+the controller device. CAP identity and interface names are evidence, not device
+matching keys. Virtual interfaces inherit their explicit master radio. Unmapped
+or missing radios remain unresolved; review mappings in **Wi-Fi collection** and
+edit the configuration before restarting. Interface/radio joins refresh with
+every poll to avoid reusing obsolete mappings after controller provisioning.
+
+Polling defaults to 15 seconds, with configurable intervals from 5–30 seconds,
+five-second request timeouts, up to eight independent sources, sequential requests
+per source, and capped retry backoff with jitter. Wi-Fi collection runs without an
+open browser. Backend/UI updates use Server-Sent Events, refreshing observations
+within about five seconds of collection without replacing pending plan edits.
+
+**Wi-Fi collection** shows source health, last success/attempt, radio mappings,
+matched clients and unmatched MACs. Clients match only existing interface MAC
+aliases within the configured identity domain. Polling never creates or renames
+equipment, moves markers, infers cables, or adds identities. Select a client or AP
+to inspect SSID, band, signal and AP receive/transmit link rates where available.
+Rates are in Mbps, not internet throughput; missing measurements remain unknown.
+Registrations retain their access-authorization flag; an unauthorized registration
+is still radio evidence and is not treated as an empty table or an absent client.
+
+Selecting a positioned client or AP draws dashed Wi-Fi associations. Cross-floor
+wireless portals navigate between the documented locations. Stale associations
+are muted and labeled. Mobile/unplaced clients remain in the inventory and AP
+client list without an inferred position on the floor plan. Conflicting fresh
+registrations remain explicit and are not drawn as a definitive AP connection.
+
+A successful complete snapshot can mark a previously seen MAC **Not associated**
+and retain its last-seen time. Errors, partial replies and unsupported menus never
+establish absence. Observations become stale after 45 seconds without a successful
+snapshot, after a live-update connection failure, or on application restart until
+refreshed. Removing a source disables collection and leaves historical snapshots
+stale. This does not assert that a device is powered off. No general online/offline
+status, automatic DHCP refresh, or observed wired link/PoE status is provided yet.
+
+For Docker, mount the config and password file read-only, then extend the command
+with `-wifi-config /config/wifi.json` while retaining `-listen 0.0.0.0:8080 -data
+/data`. Ensure the application user can read the mounted files and reach the
+configured management endpoints.
 
 ## Drawing cable routes
 
@@ -212,6 +279,14 @@ Schema version 3 adds a nullable physical-port foreign key to interfaces and
 backfills it from any existing reference. Upgrading schema 1 or 2 preserves the
 plan revision and saved DHCP evidence. References are optional for older plans.
 
+Schema version 4 adds a separate Wi-Fi source-snapshot table. Upgrading versions
+1–3 preserves the manual plan revision, route geometry, interface identities and
+DHCP evidence. Portable plan JSON/ZIP omits Wi-Fi observations and source secrets;
+a full SQLite backup retains observation history. Back up before upgrading. To
+roll back to an older binary, restore the pre-upgrade database while the app is
+stopped; older binaries intentionally refuse schema 4. Preserve the private Wi-Fi
+configuration and password files separately when restoring to another machine.
+
 ## Access and configuration
 
 ```sh
@@ -262,6 +337,8 @@ The same-origin API exposes:
 | `POST /api/validate` | Validate an import without changing saved state |
 | `POST /api/cable-labels/preview` | Preview labels from a complete working plan without saving it |
 | `GET /api/export` | Download the saved documentation archive |
+| `GET /api/observations/wifi` | Derived source health, radio mappings and matched/unmatched Wi-Fi clients |
+| `GET /api/observations/wifi/events` | Authenticated SSE observation updates; reconnect sends a complete view |
 | `GET /api/observations/dhcp` | Read saved DHCP evidence separately from the manual plan |
 | `POST /api/observations/dhcp` | Validate and atomically record a batch without changing the manual plan revision |
 | `GET/POST/DELETE /api/session` | Session status, sign in, sign out |
@@ -271,14 +348,15 @@ Save requires the current revision. An outdated revision returns HTTP 409;
 invalid documentation returns 400. Mutations require `X-Yanetviz: 1`. API requests
 are limited to 32 MiB; DHCP observation batches are limited to 8 MiB and 10,000
 records. Plan format version remains 1 with an optional `interfaces` collection;
-SQLite schema version is 3. Observation records must reference a documented source
+SQLite schema version is 4. Observation records must reference a documented source
 device and an interface owning the observed domain/MAC. DHCP client IDs are
 preserved as supplied and do not act as matching keys.
 
 ## Remaining design work
 
-There is no MikroTik polling, live Wi-Fi association data, or observed link/PoE
-status yet. PoE mode, standard/type, and voltage can be documented on ports, but
+CAPsMAN Wi-Fi polling is implemented for the modern WiFi tables. Legacy collectors,
+a source/mapping configuration UI, automatic DHCP refresh, and observed wired
+link/PoE status remain future work. PoE mode, standard/type, and voltage can be documented on ports, but
 no live power flow is inferred. The topology screen is currently a grouped
 inventory and cable register; a schematic graph with editable layout, richer
 path highlighting and live-update notifications remain future

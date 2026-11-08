@@ -4,7 +4,11 @@ import { CableRoute } from "./CableRoute";
 import { replaceSections } from "./routes";
 import type { ChangePlan } from "./DeviceEditor";
 
+import { WirelessOverlay } from "./WirelessOverlay";
+import type { WiFiView } from "./wifi";
+
 type Props = {
+  wifi: WiFiView;
   plan: Plan;
   floor: string;
   edit: boolean;
@@ -36,6 +40,7 @@ const clampPosition = (value: number) =>
 
 export function Map({
   plan: p,
+  wifi,
   floor,
   edit,
   selection,
@@ -299,6 +304,15 @@ export function Map({
                 }
               />
             ))}
+          <WirelessOverlay
+            plan={p}
+            wifi={wifi}
+            floor={floor}
+            height={height}
+            selection={selection}
+            point={devicePoint}
+            navigate={navigate}
+          />
           {p.cabinets
             .filter((c) => c.floor === floor && c.placed)
             .map((c) =>

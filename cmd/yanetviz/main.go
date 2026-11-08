@@ -20,16 +20,20 @@ import (
 	"time"
 	"yanetviz"
 	"yanetviz/internal/plan"
+	"yanetviz/internal/wifi"
 )
 
 type server struct {
-	store    *plan.Store
-	password [32]byte
-	auth     bool
-	secure   bool
-	mu       sync.Mutex
-	sessions map[string]time.Time
-	writes   sync.Mutex
+	wifiStarted time.Time
+	wifiEnabled map[string]bool
+	wifiPending []plan.WiFiSnapshot
+	store       *plan.Store
+	password    [32]byte
+	auth        bool
+	secure      bool
+	mu          sync.Mutex
+	sessions    map[string]time.Time
+	writes      sync.Mutex
 }
 
 func main() {
@@ -41,6 +45,7 @@ func run() error {
 	addr := flag.String("listen", "127.0.0.1:8080", "HTTP listen address")
 	data := flag.String("data", "data", "Persistent data directory")
 	secure := flag.Bool("secure-cookie", false, "Require HTTPS for login cookies (enable behind an HTTPS proxy)")
+	wifiPath := flag.String("wifi-config", "", "Optional WiFi CAPsMAN collection configuration JSON")
 	flag.Parse()
 	password := os.Getenv("YANETVIZ_PASSWORD")
 	host, _, err := net.SplitHostPort(*addr)
@@ -63,7 +68,24 @@ func run() error {
 			log.Printf("close database: %v", err)
 		}
 	}()
+	var wifiConfig wifi.Config
+	if *wifiPath != "" {
+		document, err := store.Load()
+		if err != nil {
+			return err
+		}
+		wifiConfig, err = wifi.LoadConfig(*wifiPath, document)
+		if err != nil {
+			return err
+		}
+	}
 	s := &server{store: store, auth: password != "", password: sha256.Sum256([]byte(password)), sessions: map[string]time.Time{}, secure: *secure}
+	s.wifiStarted = time.Now()
+	s.wifiEnabled = map[string]bool{}
+	for _, source := range wifiConfig.Sources {
+		s.wifiEnabled[source.ID] = true
+		s.wifiPending = append(s.wifiPending, plan.WiFiSnapshot{Source: source.ID, Device: source.Device, Domain: source.Domain})
+	}
 	web, err := fs.Sub(yanetviz.Assets, "web/dist")
 	if err != nil {
 		return fmt.Errorf("open bundled frontend: %w", err)
@@ -77,6 +99,8 @@ func run() error {
 	mux.HandleFunc("/api/cable-labels/preview", s.protect(s.previewCableLabels))
 	mux.HandleFunc("/api/export", s.protect(s.export))
 	mux.HandleFunc("/api/observations/dhcp", s.protect(s.dhcpObservations))
+	mux.HandleFunc("/api/observations/wifi", s.protect(s.wifiObservations))
+	mux.HandleFunc("/api/observations/wifi/events", s.protect(s.wifiEvents))
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
 		if _, err := store.Load(); err != nil {
 			http.Error(w, "database unavailable", 503)
@@ -106,6 +130,17 @@ func run() error {
 	srv := &http.Server{Addr: *addr, Handler: handler, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 1 << 20}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	srv.BaseContext = func(_ net.Listener) context.Context { return ctx }
+	collectionCtx, cancelCollection := context.WithCancel(ctx)
+	collectionDone := make(chan struct{})
+	go func() {
+		defer close(collectionDone)
+		wifi.Run(collectionCtx, wifiConfig, store)
+	}()
+	defer func() {
+		cancelCollection()
+		<-collectionDone
+	}()
 	go func() {
 		<-ctx.Done()
 		shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)

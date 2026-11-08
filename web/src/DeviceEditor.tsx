@@ -1,3 +1,5 @@
+import { WiFiDetails } from "./WiFiDetails";
+import type { WiFiView } from "./wifi";
 import { InterfaceEditor } from "./InterfaceEditor";
 import { useState } from "react";
 import { Field, SelectField, TextField } from "./Fields";
@@ -19,6 +21,7 @@ export type ChangePlan = (update: (plan: Plan) => Plan) => void;
 
 type Props = {
   device: Device;
+  wifi: WiFiView;
   plan: Plan;
   observations: DHCPObservation[];
   observationError?: string;
@@ -30,6 +33,7 @@ type Props = {
 
 export function DeviceEditor({
   device: d,
+  wifi,
   plan: p,
   observations,
   observationError,
@@ -203,6 +207,7 @@ export function DeviceEditor({
         disabled={!edit}
         multiline
       />
+      <WiFiDetails plan={p} wifi={wifi} device={d.id} select={select} />
       <InterfaceEditor
         device={d}
         plan={p}
