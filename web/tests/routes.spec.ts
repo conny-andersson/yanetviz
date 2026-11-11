@@ -1,6 +1,138 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import type { Plan } from "../src/model";
 
+test("cabinet patch leads stay documented without floor-plan routes", async ({
+  page,
+  request,
+}) => {
+  const original: Plan = await (await request.get("/api/plan")).json();
+  const headers = { "X-Yanetviz": "1" };
+  try {
+    const prepared = structuredClone(original);
+    prepared.cabinets.push(
+      {
+        id: "rack-a",
+        name: "Rack A",
+        floor: "basement",
+        x: 0.2,
+        y: 0.3,
+        placed: true,
+      },
+      {
+        id: "rack-b",
+        name: "Rack B",
+        floor: "basement",
+        x: 0.7,
+        y: 0.3,
+        placed: true,
+      },
+    );
+    for (const [id, cabinet] of [
+      ["rack-device-a", "rack-a"],
+      ["rack-device-b", "rack-a"],
+      ["rack-device-c", "rack-b"],
+      ["outside-a", ""],
+      ["outside-b", ""],
+    ]) {
+      prepared.devices.push({
+        ...prepared.devices[0],
+        id,
+        name: id,
+        cabinet,
+        rackUnit: null,
+        mode: "fixed",
+        floor: cabinet ? "" : "basement",
+        x: 0.4,
+        y: 0.6,
+      });
+    }
+    prepared.cables = [
+      ["Internal patch lead", "rack-device-a", "rack-device-b"],
+      ["Between cabinets", "rack-device-a", "rack-device-c"],
+      ["Cabinet to room", "rack-device-a", "outside-a"],
+      ["Outside cabinets", "outside-a", "outside-b"],
+    ].map(([label, a, b]) => ({
+      id: label,
+      label,
+      a: { device: a, port: "" },
+      b: { device: b, port: "" },
+      medium: "copper",
+      length: null,
+      notes: "Keep this documentation",
+      draft: true,
+    }));
+    // Old geometry, including intermediate floors, must be hidden and preserved.
+    prepared.cables[0].sections = [
+      { floor: "basement", points: [{ x: 0.4, y: 0.2 }], confirmed: true },
+      { floor: "attic", confirmed: false },
+    ];
+    expect(
+      (await request.put("/api/plan", { headers, data: prepared })).ok(),
+    ).toBe(true);
+    await page.goto("/");
+    await expect(page.locator(".cable")).toHaveCount(3);
+    const tabs = page.getByRole("navigation", { name: "Floors" });
+    await tabs.getByRole("button", { name: "Attic", exact: true }).click();
+    await expect(page.locator(".cable")).toHaveCount(0);
+    await page
+      .getByRole("button", { name: "Topology & cables", exact: true })
+      .click();
+    await expect(page.locator(".cable-register-row")).toHaveCount(4);
+    await page
+      .locator(".cable-register-row")
+      .filter({ hasText: "Internal patch lead" })
+      .click();
+    await expect(page.locator(".details-panel")).toContainText(
+      "Both ends are in the same cabinet",
+    );
+    await expect(page.locator(".routing-editor")).toHaveCount(0);
+    await expect(page.getByLabel("Notes / routing details")).toHaveValue(
+      "Keep this documentation",
+    );
+    await expect(page.locator(".trace")).toContainText("rack-device-a");
+    await page.getByRole("button", { name: "View mode", exact: true }).click();
+    await expect(page.locator(".routing-editor")).toHaveCount(0);
+    await page
+      .getByLabel("Notes / routing details")
+      .fill("Updated patch lead notes");
+    await page
+      .getByRole("button", { name: "Save changes", exact: true })
+      .click();
+    await expect(page.getByRole("status")).toContainText("Documentation saved");
+    const saved: Plan = await (await request.get("/api/plan")).json();
+    expect(saved.cables[0]).toEqual({
+      ...prepared.cables[0],
+      notes: "Updated patch lead notes",
+    });
+    // Reassignment restores routing immediately; Undo restores the cabinet rule.
+    await page
+      .locator(".inventory")
+      .getByRole("button", { name: /rack-device-b/ })
+      .click();
+    await page.getByLabel("Cabinet", { exact: true }).selectOption("rack-b");
+    await page
+      .locator(".cable-register-row")
+      .filter({ hasText: "Internal patch lead" })
+      .click();
+    await expect(page.locator(".routing-editor")).toHaveCount(1);
+    await page.getByRole("button", { name: "Undo", exact: true }).click();
+    await expect(page.locator(".routing-editor")).toHaveCount(0);
+    await page.reload();
+    await tabs.getByRole("button", { name: "Basement", exact: true }).click();
+    await expect(page.locator(".cable")).toHaveCount(3);
+  } finally {
+    const current: Plan = await (await request.get("/api/plan")).json();
+    expect(
+      (
+        await request.put("/api/plan", {
+          headers,
+          data: { ...original, revision: current.revision },
+        })
+      ).ok(),
+    ).toBe(true);
+  }
+});
+
 async function drag(page: Page, marker: Locator, dx: number, dy: number) {
   const box = await marker.boundingBox();
   expect(box).not.toBeNull();

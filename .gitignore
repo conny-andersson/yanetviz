@@ -5,6 +5,7 @@
 /web/node_modules/
 /web/dist/
 /yanetviz
+/artifacts/
 *.db
 *.db-shm
 *.db-wal

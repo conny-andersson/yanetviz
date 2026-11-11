@@ -1,7 +1,12 @@
 import { Field } from "./Fields";
 import type { Cable, Plan, RouteSection } from "./model";
 import type { ChangePlan } from "./DeviceEditor";
-import { cableLocation, replaceSections, routeSections } from "./routes";
+import {
+  cableLocation,
+  isWithinCabinet,
+  replaceSections,
+  routeSections,
+} from "./routes";
 
 type Props = {
   plan: Plan;
@@ -18,6 +23,14 @@ export function CableRoutingEditor({
   change,
   navigate,
 }: Props) {
+  if (isWithinCabinet(plan, cable)) {
+    return (
+      <p className="help">
+        Both ends are in the same cabinet. This cable is hidden from floor plans
+        and has no floor-plan routing controls.
+      </p>
+    );
+  }
   const sections = routeSections(plan, cable);
   const update = (next: RouteSection[]) =>
     change((current) => replaceSections(current, cable.id, next));

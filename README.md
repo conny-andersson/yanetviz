@@ -193,10 +193,12 @@ registrations remain explicit and are not drawn as a definitive AP connection.
 A successful complete snapshot can mark a previously seen MAC **Not associated**
 and retain its last-seen time. Errors, partial replies and unsupported menus never
 establish absence. Observations become stale after 180 seconds without a successful
-snapshot, after a live-update connection failure, or on application restart until
-refreshed. Removing a source disables collection and leaves historical snapshots
-stale. This does not assert that a device is powered off. No general online/offline
-status, automatic DHCP refresh, or observed wired link/PoE status is provided yet.
+snapshot, or on application restart until refreshed. Stream reconnects and
+connection failures show a separate connection message; they do not shorten
+the freshness window for retained readings. Removing a source disables collection
+and leaves historical snapshots stale. This does not assert that a device is
+powered off. General online/offline status and automatic DHCP refresh are not
+provided yet.
 
 For Docker, mount the config and password file read-only, then extend the command
 with `-wifi-config /config/wifi.json` while retaining `-listen 0.0.0.0:8080 -data
@@ -301,6 +303,12 @@ For Docker, mount this configuration/password file read-only and add
 `-monitor-config /config/monitor.json` to the existing application command.
 
 ## Drawing cable routes
+
+Cables whose endpoints belong to the same cabinet are hidden from floor plans
+and have no floor-plan routing controls. They remain in the cable list, physical
+traces, labeling and observations. Existing route geometry is retained in saves
+and exports and becomes available again if an endpoint leaves the cabinet.
+Cables between different cabinets or equipment outside cabinets remain routable.
 
 In **Edit mode**, set the current floor's optional integer **Floor level** in the
 canvas toolbar (for example basement `-1`, entrance `0`, attic `1`). Leave unknown
@@ -415,7 +423,35 @@ docker compose up --build -d
 ```
 
 Compose binds to loopback and uses a persistent named volume. The container runs
-as a non-root user. The Docker recipe has not yet been exercised in this workspace.
+as UID/GID `10001:10001`. The Linux amd64 image has been smoke-tested for startup,
+login, plan saving and persistence across a container restart.
+
+To build and export the `v0.1` image for transfer to an amd64 NAS:
+
+```sh
+docker build --platform linux/amd64 -t yanetviz:v0.1 .
+mkdir -p artifacts
+docker save yanetviz:v0.1 | gzip > artifacts/yanetviz-v0.1-linux-amd64.tar.gz
+# On the NAS, after copying the archive:
+docker load -i yanetviz-v0.1-linux-amd64.tar.gz
+```
+
+The archive contains the application, not local data or credentials. Stop the
+local application and copy its entire `data/` directory separately, preserving
+any SQLite WAL files. Mount the copied directory at `/data`, writable by UID/GID
+`10001:10001`, and supply `YANETVIZ_PASSWORD` at startup. For the existing local
+monitoring setup, retain `wifi.local.json`, `monitor.local.json` and their
+referenced password files in that directory, and use these container arguments:
+
+```text
+-listen 0.0.0.0:8080 -data /data -wifi-config /data/wifi.local.json -monitor-config /data/monitor.local.json
+```
+
+When using the exported image with Compose, replace `build: .` with
+`image: yanetviz:v0.1`, add the arguments above as `command`, and replace the empty
+named volume with a bind mount of the copied directory. The default loopback port
+binding supports a reverse proxy running on the NAS. Build for `linux/arm64`
+instead if the destination NAS uses ARM; the amd64 image is not an ARM build.
 
 ## Development and checks
 

@@ -5,9 +5,18 @@ export function cableLocation(plan: Plan, device: string) {
   return equipment ? location(plan, equipment) : null;
 }
 
+export function isWithinCabinet(plan: Plan, cable: Cable): boolean {
+  const a = plan.devices.find((device) => device.id === cable.a.device);
+  const b = plan.devices.find((device) => device.id === cable.b.device);
+  return !!a?.cabinet && a.cabinet === b?.cabinet;
+}
+
 // Legacy cables acquire sections only when the user edits their drawing. Levels
 // never change an existing route, and automatic geometry is not confirmation.
 export function routeSections(plan: Plan, cable: Cable): RouteSection[] {
+  // Cabinet patch leads remain part of physical traces, but have no floor-plan
+  // drawing. Retain saved geometry in case cabinet membership changes later.
+  if (isWithinCabinet(plan, cable)) return [];
   if (cable.sections?.length) return cable.sections;
   const floors = [
     cableLocation(plan, cable.a.device)?.floor,

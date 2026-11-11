@@ -27,7 +27,7 @@ export function useLiveObservations(authenticated: boolean | null) {
     const failed = () => {
       if (active)
         setError(
-          "Live observation updates unavailable; retained readings are stale. Reconnecting…",
+          "Live observation updates disconnected. Reconnecting… Readings expire 180 seconds after their last successful poll.",
         );
     };
     api<LiveView>("/api/observations/live")
@@ -47,6 +47,9 @@ export function useLiveObservations(authenticated: boolean | null) {
       }
     };
     stream.onerror = failed;
+    stream.onopen = () => {
+      if (active) setError("");
+    };
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => {
       active = false;
@@ -54,8 +57,10 @@ export function useLiveObservations(authenticated: boolean | null) {
       window.clearInterval(timer);
     };
   }, [authenticated]);
+  // Stream renewal and transport failures do not invalidate a successful poll.
+  // Keep connection health separate, and let retained readings age normally.
   const expired = (lastSuccess?: string) =>
-    !!error || !lastSuccess || now - Date.parse(lastSuccess) >= 180000;
+    !lastSuccess || now - Date.parse(lastSuccess) >= 180000;
   const staleWiFi = new Set(
     view.wifi.sources
       .filter((source) => expired(source.lastSuccess))
