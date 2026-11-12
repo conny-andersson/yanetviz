@@ -23,10 +23,30 @@ func (s *server) authorized(r *http.Request) bool {
 	until, ok := s.sessions[c.Value]
 	return ok && time.Now().Before(until)
 }
+
+// permissions describes application capabilities independently of login identity.
+// Future user roles can resolve to the same view/edit capabilities.
+type permissions struct {
+	View bool `json:"view"`
+	Edit bool `json:"edit"`
+}
+
+func (s *server) permissions(r *http.Request) permissions {
+	edit := s.authorized(r)
+	return permissions{View: s.publicView || edit, Edit: edit}
+}
+
 func (s *server) protect(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !s.authorized(r) {
-			http.Error(w, "sign in required", 401)
+		access := s.permissions(r)
+		allowed := access.Edit
+		// All protected GET/HEAD routes read saved documentation or observations.
+		// Other methods, including import validation and label previews, require edit.
+		if r.Method == http.MethodGet || r.Method == http.MethodHead {
+			allowed = access.View
+		}
+		if !allowed {
+			http.Error(w, "sign in required", http.StatusUnauthorized)
 			return
 		}
 		next(w, r)
@@ -35,7 +55,11 @@ func (s *server) protect(next http.HandlerFunc) http.HandlerFunc {
 func (s *server) session(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
-		output(w, 200, map[string]bool{"authenticated": s.authorized(r), "loginRequired": s.auth})
+		output(w, http.StatusOK, struct {
+			Authenticated bool        `json:"authenticated"`
+			LoginRequired bool        `json:"loginRequired"`
+			Permissions   permissions `json:"permissions"`
+		}{s.authorized(r), s.auth, s.permissions(r)})
 	case "POST":
 		var body struct {
 			Password string `json:"password"`

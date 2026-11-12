@@ -14,6 +14,8 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 0' INT TERM
 go build -buildvcs=false -o "$test_directory/yanetviz" ./cmd/yanetviz
-YANETVIZ_PASSWORD= "$test_directory/yanetviz" -listen 127.0.0.1:18080 -data "$test_directory/data" &
+YANETVIZ_PASSWORD="${YANETVIZ_TEST_PASSWORD:-}" "$test_directory/yanetviz" \
+  -listen "127.0.0.1:${YANETVIZ_TEST_PORT:-18080}" -data "$test_directory/data" \
+  -public-view="${YANETVIZ_TEST_PUBLIC_VIEW:-false}" &
 server_pid=$!
 wait "$server_pid"

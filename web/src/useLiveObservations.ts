@@ -7,12 +7,12 @@ type LiveView = { wifi: WiFiView; ports: PortView };
 const empty: LiveView = { wifi: emptyWiFi, ports: emptyPorts };
 
 // One stream per tab updates only observations, preserving working plans/undo.
-export function useLiveObservations(authenticated: boolean | null) {
+export function useLiveObservations(canView: boolean) {
   const [view, setView] = useState<LiveView>(empty);
   const [error, setError] = useState("");
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
-    if (!authenticated) {
+    if (!canView) {
       setView(empty);
       return;
     }
@@ -56,7 +56,7 @@ export function useLiveObservations(authenticated: boolean | null) {
       stream.close();
       window.clearInterval(timer);
     };
-  }, [authenticated]);
+  }, [canView]);
   // Stream renewal and transport failures do not invalidate a successful poll.
   // Keep connection health separate, and let retained readings age normally.
   const expired = (lastSuccess?: string) =>

@@ -33,6 +33,7 @@ type server struct {
 	store       *plan.Store
 	password    [32]byte
 	auth        bool
+	publicView  bool
 	secure      bool
 	mu          sync.Mutex
 	sessions    map[string]time.Time
@@ -50,6 +51,7 @@ func run() error {
 	secure := flag.Bool("secure-cookie", false, "Require HTTPS for login cookies (enable behind an HTTPS proxy)")
 	wifiPath := flag.String("wifi-config", "", "Optional WiFi CAPsMAN collection configuration JSON")
 	portPath := flag.String("monitor-config", "", "Optional Ethernet link and PoE monitoring configuration JSON")
+	publicView := flag.Bool("public-view", false, "Allow viewing plans and observations without login; editing still requires login")
 	flag.Parse()
 	password := os.Getenv("YANETVIZ_PASSWORD")
 	host, _, err := net.SplitHostPort(*addr)
@@ -94,7 +96,7 @@ func run() error {
 			return err
 		}
 	}
-	s := &server{store: store, auth: password != "", password: sha256.Sum256([]byte(password)), sessions: map[string]time.Time{}, secure: *secure}
+	s := &server{store: store, auth: password != "", password: sha256.Sum256([]byte(password)), sessions: map[string]time.Time{}, secure: *secure, publicView: *publicView}
 	s.wifiStarted = time.Now()
 	s.wifiEnabled = map[string]bool{}
 	for _, source := range wifiConfig.Sources {

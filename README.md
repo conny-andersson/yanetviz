@@ -415,6 +415,33 @@ For access beyond the local machine, use a private HTTPS reverse proxy and pass
 service. Mutating requests require the application header and a same-origin
 request; session cookies are HttpOnly and SameSite=Strict.
 
+Viewing without login is optional and disabled by default. Add `-public-view` to
+allow anyone who can reach the service to inspect floor plans, equipment,
+cables, client details, live observations, and download plan exports. This also
+exposes documented IP/MAC addresses and notes; use it only on a trusted network.
+Keep `YANETVIZ_PASSWORD` set: the administrator must sign in to edit, save,
+validate imports, or preview cable labels. Backend view/edit permissions protect
+these operations independently of the visible editing controls. Local loopback
+use without a password continues to allow editing without login.
+
+```sh
+./yanetviz -listen 127.0.0.1:8080 -data ./data -public-view
+```
+
+For Docker, append `-public-view` to the container's existing command, retaining
+its data and polling arguments. For example, in Compose:
+
+```yaml
+command: ["-listen", "0.0.0.0:8080", "-data", "/data", "-public-view"]
+```
+
+Anonymous viewers use **Sign in to edit**. Signing out returns to viewing when
+public viewing is enabled; pending changes require confirmation before discard.
+The browser rechecks access every minute and when the tab regains focus. Expired
+sessions cannot save, and pending changes remain available for signing in again.
+Accounts and reader/writer roles are not implemented yet; both the API and UI
+use view/edit capabilities so roles can be added later.
+
 A Docker deployment is supplied:
 
 ```sh
@@ -426,14 +453,14 @@ Compose binds to loopback and uses a persistent named volume. The container runs
 as UID/GID `10001:10001`. The Linux amd64 image has been smoke-tested for startup,
 login, plan saving and persistence across a container restart.
 
-To build and export the `v0.1` image for transfer to an amd64 NAS:
+To build and export the `v0.2` image for transfer to an amd64 NAS:
 
 ```sh
-docker build --platform linux/amd64 -t yanetviz:v0.1 .
+docker build --platform linux/amd64 -t yanetviz:v0.2 .
 mkdir -p artifacts
-docker save yanetviz:v0.1 | gzip > artifacts/yanetviz-v0.1-linux-amd64.tar.gz
+docker save yanetviz:v0.2 | gzip > artifacts/yanetviz-v0.2-linux-amd64.tar.gz
 # On the NAS, after copying the archive:
-docker load -i yanetviz-v0.1-linux-amd64.tar.gz
+docker load -i yanetviz-v0.2-linux-amd64.tar.gz
 ```
 
 The archive contains the application, not local data or credentials. Stop the
@@ -448,7 +475,7 @@ referenced password files in that directory, and use these container arguments:
 ```
 
 When using the exported image with Compose, replace `build: .` with
-`image: yanetviz:v0.1`, add the arguments above as `command`, and replace the empty
+`image: yanetviz:v0.2`, add the arguments above as `command`, and replace the empty
 named volume with a bind mount of the copied directory. The default loopback port
 binding supports a reverse proxy running on the NAS. Build for `linux/arm64`
 instead if the destination NAS uses ARM; the amd64 image is not an ARM build.

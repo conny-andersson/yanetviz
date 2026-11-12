@@ -19,6 +19,12 @@ import { useLiveObservations } from "./useLiveObservations";
 import { PortOverview } from "./PortOverview";
 import { WiFiOverview } from "./WiFiOverview";
 
+type Session = {
+  authenticated: boolean;
+  loginRequired: boolean;
+  permissions: { view: boolean; edit: boolean };
+};
+
 export function App() {
   const [plan, setPlan] = useState<Plan | null>(null);
   const [observations, setObservations] = useState<DHCPObservation[]>([]);
@@ -27,11 +33,14 @@ export function App() {
   const [history, setHistory] = useState<Plan[]>([]);
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
   const [loginRequired, setLoginRequired] = useState(false);
+  const [permissions, setPermissions] = useState({ view: false, edit: false });
+  const [showLogin, setShowLogin] = useState(false);
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [saving, setSaving] = useState(false);
-  const [edit, setEdit] = useState(false);
+  const [editing, setEdit] = useState(false);
+  const edit = permissions.edit && editing;
   const [floor, setFloor] = useState("basement");
   const [view, setView] = useState("floor");
   const [cableSort, setCableSort] = useState<CableSort>("original");
@@ -41,7 +50,7 @@ export function App() {
   const importInput = useRef<HTMLInputElement>(null);
   const backgroundInput = useRef<HTMLInputElement>(null);
   const dirty = plan !== saved;
-  const live = useLiveObservations(authenticated);
+  const live = useLiveObservations(permissions.view);
 
   useEffect(() => {
     setZoom(1);
@@ -76,14 +85,35 @@ export function App() {
   }, [loadObservations]);
 
   useEffect(() => {
-    api<{ authenticated: boolean; loginRequired: boolean }>("/api/session")
+    api<Session>("/api/session")
       .then((session) => {
         setAuthenticated(session.authenticated);
         setLoginRequired(session.loginRequired);
-        if (session.authenticated) return load();
+        setPermissions(session.permissions);
+        if (session.permissions.view) return load();
       })
       .catch((error) => setError(String(error.message)));
   }, [load]);
+
+  // Recheck expiring sessions without replacing the working plan or undo history.
+  useEffect(() => {
+    const refreshAccess = () => {
+      api<Session>("/api/session")
+        .then((session) => {
+          setAuthenticated(session.authenticated);
+          setPermissions(session.permissions);
+        })
+        .catch(() => {
+          // A connection failure is not evidence that the session has expired.
+        });
+    };
+    const timer = window.setInterval(refreshAccess, 60000);
+    window.addEventListener("focus", refreshAccess);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refreshAccess);
+    };
+  }, []);
 
   useEffect(() => {
     const beforeUnload = (event: BeforeUnloadEvent) => {
@@ -102,7 +132,7 @@ export function App() {
   };
 
   async function save() {
-    if (!plan || saving) return;
+    if (!permissions.edit || !plan || saving) return;
     setSaving(true);
     setError("");
     try {
@@ -251,7 +281,7 @@ export function App() {
     reader.readAsDataURL(file);
   }
 
-  if (authenticated === false)
+  if (showLogin || (authenticated === false && !permissions.view))
     return (
       <main className="login">
         <form
@@ -261,8 +291,12 @@ export function App() {
             try {
               await api("/api/session", "POST", { password });
               setPassword("");
-              await load();
-              setAuthenticated(true);
+              const session = await api<Session>("/api/session");
+              if (!plan) await load();
+              setAuthenticated(session.authenticated);
+              setPermissions(session.permissions);
+              setShowLogin(false);
+              setEdit(true);
             } catch (error) {
               setError((error as Error).message);
             }
@@ -288,6 +322,18 @@ export function App() {
             </p>
           )}
           <button className="primary">Sign in</button>
+          {permissions.view && (
+            <button
+              type="button"
+              onClick={() => {
+                setShowLogin(false);
+                setPassword("");
+                setError("");
+              }}
+            >
+              Continue viewing
+            </button>
+          )}
         </form>
       </main>
     );
@@ -342,7 +388,7 @@ export function App() {
           <a className="button" href="/api/export">
             Export saved plan
           </a>
-          {loginRequired && (
+          {loginRequired && authenticated && (
             <button
               onClick={async () => {
                 if (
@@ -350,13 +396,26 @@ export function App() {
                   !window.confirm("Sign out and discard unsaved changes?")
                 )
                   return;
-                await fetch("/api/session", {
-                  method: "DELETE",
-                  headers: { "X-Yanetviz": "1" },
-                });
-                setPlan(null);
-                setSaved(null);
-                setAuthenticated(false);
+                try {
+                  const response = await fetch("/api/session", {
+                    method: "DELETE",
+                    headers: { "X-Yanetviz": "1" },
+                  });
+                  if (!response.ok) throw new Error(await response.text());
+                  const session = await api<Session>("/api/session");
+                  setAuthenticated(session.authenticated);
+                  setPermissions(session.permissions);
+                  setEdit(false);
+                  setHistory([]);
+                  setNotice("");
+                  if (session.permissions.view) await load();
+                  else {
+                    setPlan(null);
+                    setSaved(null);
+                  }
+                } catch (error) {
+                  setError((error as Error).message);
+                }
               }}
             >
               Sign out
@@ -439,12 +498,23 @@ export function App() {
                   </button>
                 </>
               )}
-              <button
-                className={`mode-button ${edit ? "editing" : ""}`}
-                onClick={() => setEdit(!edit)}
-              >
-                {edit ? "✎ Edit mode" : "View mode"}
-              </button>
+              {permissions.edit ? (
+                <button
+                  className={`mode-button ${edit ? "editing" : ""}`}
+                  onClick={() => setEdit(!edit)}
+                >
+                  {edit ? "✎ Edit mode" : "View mode"}
+                </button>
+              ) : (
+                <button
+                  onClick={() => {
+                    setError("");
+                    setShowLogin(true);
+                  }}
+                >
+                  Sign in to edit
+                </button>
+              )}
             </div>
           </div>
           <div className="floor-toolbar">
